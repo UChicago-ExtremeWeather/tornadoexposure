@@ -159,7 +159,7 @@ get_data <- function(zcta_list, year_range){
 #' @export
 #'
 #' @importFrom dplyr %>%
-map_exposure <- function(zcta_list, year_range, feature){
+map_exposure <- function(zcta_list, year_range, feature=NULL){
 
   feature_labels <- c(
     tornado_id = "Number of Tornadoes",
@@ -170,31 +170,65 @@ map_exposure <- function(zcta_list, year_range, feature){
 
   subset <- get_data(zcta_list, year_range)
 
-  fill_data <- generate_feature(subset, feature)
-
   boundary_geom <- get_geometry(zcta_list, year_range)
 
-  plot_data <- boundary_geom %>%
-    dplyr::left_join(
-      sf::st_drop_geometry(fill_data),
-      by = "ZCTA")
+  if (!is.null(feature)) {
 
-  yr_label <- if (length(year_range) == 1 || min(year_range) == max(year_range)) {
+    fill_data <- generate_feature(subset, feature)
+
+    plot_data <- boundary_geom %>%
+      dplyr::left_join(
+        sf::st_drop_geometry(fill_data),
+        by = "ZCTA"
+      )
+
+  } else {
+
+    plot_data <- boundary_geom
+
+  }
+
+  yr_label <- if (length(year_range) == 1 ||
+                  min(year_range) == max(year_range)
+                  ) {
     as.character(min(year_range))
   } else {
     paste0(min(year_range), "–", max(year_range))
   }
 
-  ggplot2::ggplot(plot_data) +
-    ggplot2::geom_sf(
-      ggplot2::aes(fill = value),
-      color = "black"
-    ) +
-    scico::scale_fill_scico(palette = "lajolla", na.value = "transparent", direction = -1) +
-    ggplot2::labs( # eventually modify so that the fill value isn't just the column name
-      fill = feature_labels[[feature]],
-      title = paste0("Tornado Exposures, ", yr_label)
-    ) + ggplot2::theme_void()
+  p <- ggplot2::ggplot(plot_data)
+
+  if (!is.null(feature)) {
+
+    p <- p +
+      ggplot2::geom_sf(
+        ggplot2::aes(fill = value),
+        color = "black"
+      ) +
+      scico::scale_fill_scico(
+        palette = "lajolla",
+        na.value = "transparent",
+        direction = -1
+      ) +
+      ggplot2::labs(
+        fill = feature_labels[[feature]],
+        title = paste0("Tornado Exposures, ", yr_label)
+      )
+
+  } else {
+
+    p <- p +
+      ggplot2::geom_sf(
+        fill = NA,
+        color = "black"
+      ) +
+      ggplot2::labs(
+        title = paste0("Tornado Exposures, ", yr_label)
+      )
+
+  }
+
+  p + ggplot2::theme_void()
 }
 
 #' Overlay tornado tracks on top of ZCTA boundary maps

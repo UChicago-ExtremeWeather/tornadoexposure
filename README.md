@@ -13,36 +13,92 @@ ZCTA codes must be passed into the functions as a vector. ZCTA codes can be pass
 Years must be input as a range of integers. Ranges can be as small as a single year (eg. ```2011```) or as large as the full range of years included in the dataset (as of version 0.1.0, ```1996:2025```).
 
 ### Getting ZCTA-level exposure data (```get_data```)
-This function lets you create a dataframe containing all exposures for a given set of ZCTAs and range of years. 
+Given a list of ZCTA codes and a year or range of years, this function produces a dataframe containing all tornadoexposures recorded in the ZCTAs of interest during the specified timeframe. The output dataframe contains the following exposure characteristics:
 
 | Feature | Data Type | Description |
 |---------|-----------|-------------|
-| tornado_id | character | unique string identifying each tornado, comprised of the year of the tornado followed by its NOAA om id. Om are unique within years but not across years, which is why it was combined with year to create this id.|
-| date | date | date in yyyy-mm-dd format |
-| year | integer |  the year of the tornado |
-| month | character | the month of the tornado in mm format |
-| day | character | the day of the tornado in dd format |
-| magnitude | integer | the magnitude of the tornado on the Enhanced Fujita (EF) scale. Magnitudes for storms recorded prior to the shift from F to EF in 2008 are converted to the EF scale. |
-| total_injury | integer | The total number of injuries reported for a given tornado |
-| total_fatality | integer | The total number of fatalities reported for a given tornado |
+| tornado_id | character | A unique string identifying each tornado, comprised of the year of the tornado followed by its NOAA "om"" ID. "om"s are unique within years but not across years, which is why they were combined with year to create this ID.|
+| date | date | Date in yyyy-mm-dd format. |
+| year | integer |  The year of the tornado. |
+| month | character | The month of the tornado in mm format. |
+| day | character | The day of the tornado in dd format. |
+| magnitude | integer | The magnitude of the tornado on the Enhanced Fujita (EF) scale. Magnitudes for storms recorded prior to the shift from F to EF in 2008 are converted to the EF scale. |
+| total_injury | integer | The total number of injuries reported for a given tornado.This count is cumulative for each tornado, and therefore not actually representative of the ZCTA level effects if the tornado affected multiple ZCTAs. |
+| total_fatality | integer | The total number of fatalities reported for a given tornado. This count is cumulative for each tornado, and therefore not actually representative of the ZCTA level effects if the tornado affected multiple ZCTAs. |
 | area_pct_affected | integer | The percentage of the total ZCTA area that was directly affected by the tornado. |
-| ZCTA | character | The 5 digit zip code tabulation area (ZCTA) code |
-| geometry | LINESTRING [m] | A simple features geometry representing the path taken by a given tornado |
+| ZCTA | character | The 5 digit zip code tabulation area (ZCTA) code. |
+| geometry | LINESTRING [m] | A simple features geometry representing the location of and path taken by a given tornado. |
 
+#### Example usage
+To view exposures for ZCTAs beginning with the prefix ```648``` between the years 2010 and 2015, you would use the following command:
+
+```
+get_data(zcta_list=c(648), 2010:2015)
+```
+
+To store that same dataframe as an object to be exported or further manipulated, you would do this:
+
+```
+data <- get_data(zcta_list=c(648), 2010:2015)
+```
 
 ### Mapping ZCTA-level exposures (```map_exposure```)
+Given a list of ZCTA codes, a range of years, and the name of an exposure characteristic of interest, this function plots a map of all listed ZCTAs and fills each ZCTA based on the aggregate values of the indicated exposure characteristic. For instance, to visualize the number of tornadoes that occurred in ZCTAs beginning with the prefix ```648``` in the year 2011, you would use the following command:
+
+```
+map_exposure(c(648), 2011, "tornado_id")
+```
+This command would produce the following plot:
+
 ![](figures/joplin_count_singleyr.png)
+
+```map_exposure``` will automatically return the map when called. If you instead wish to save the output as a plot object (to export or further modify), you can do so with a command such as the following:
+
+```
+plot <- map_exposure(c(648), 2011, "tornado_id")
+```
 
 #### Exposure characteristics
 The ```tornadoexposure``` package supports ZCTA-level aggregation and mapping of the following exposure characteristics across input years:
 
 ##### Tornado Count
+To explore the ZCTA-level count of tornadoes for a given time period, you would input ```"tornado_id"``` as the exposure characteristic of interest. This counts up the total number of unique tornado IDs recorded within each ZCTA across the range of years specified. For example, to visualize the number of tornadoes that occurred in ZCTAs beginning with the prefix ```648``` between the years 2010-2015, you would use the following command:
+
+```
+map_exposure(c(648), 2010:2015, "tornado_id")
+```
+This command would produce the following plot:
+
 ![](figures/joplin_count.png)
+
 ##### Average Magnitude
+To explore the ZCTA-level average magnitude, as reported on the EF scale, of tornadoes in a given set of ZCTAs, you would input ```"magnitude"``` as the exposure characteristic of interest. For example, to visualize the average magnitudes of tornadoes that occurred in ZCTAs beginning with the prefix ```648``` between the years 2010-2015, you would use the following command:
+
+```
+map_exposure(c(648), 2010:2015, "magnitude")
+```
+This command would produce the following plot:
+
 ![](figures/joplin_mag.png)
+
 ##### Total Fatalities (per tornado)
+To explore the total fatalities per tornado, you would input ```"total_fatality"``` as the exposure characteristic of interest. For example, to visualize the total number of fatalities associated with tornadoes that occurred in ZCTAs beginning with the prefix ```648``` between the years 2010-2015, you would use the following command:
+
+```
+map_exposure(c(648), 2010:2015, "total_fatality")
+```
+This command would produce the following plot:
+
 ![](figures/joplin_fat.png)
+
 ##### Total Injuries (per tornado)
+To explore the total injuries per tornado, you would input ```"total_injury"``` as the exposure characteristic of interest. For example, to visualize the total number of injuries associated with tornadoes that occurred in ZCTAs beginning with the prefix ```648``` between the years 2010-2015, you would use the following command:
+
+```
+map_exposure(c(648), 2010:2015, "total_fatality")
+```
+This command would produce the following plot:
+
 ![](figures/joplin_inj.png)
 
 ### Mapping tornado tracks (```add_tracks```)
