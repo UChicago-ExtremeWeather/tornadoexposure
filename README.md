@@ -10,6 +10,7 @@
 
 ### Getting ZCTA-level exposure data (```get_data```)
 | Feature | Data Type | Description |
+|---------|-----------|-------------|
 | tornado_id | | |
 | date |||
 | year |||
