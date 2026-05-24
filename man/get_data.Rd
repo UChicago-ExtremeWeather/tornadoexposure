@@ -4,7 +4,7 @@
 \alias{get_data}
 \title{Generates a dataframe containing all exposures for a given set of ZCTA-years}
 \usage{
-get_data(dataframe, zcta_list, year)
+get_data(zcta_list, year)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}

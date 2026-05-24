@@ -27,5 +27,5 @@ ZCTAs/prefixes can be passed in as characters or integers
 
 ZCTAs/prefixes can be 1-5 characters
 
-Feature name should align with column name in dataset
+Feature name should align with column name in dataset, must be string
 }

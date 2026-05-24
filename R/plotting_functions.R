@@ -122,9 +122,9 @@ generate_feature <- function(exposed_zctas,
 #' @export
 #'
 #' @importFrom dplyr %>%
-get_data <- function(dataframe, zcta_list, year){
+get_data <- function(zcta_list, year){
 
-  subset <- dataframe %>% dplyr::filter(
+  subset <- zt %>% dplyr::filter(
     yr == year,
     stringr::str_starts(as.character(ZCTA), as.character(zcta_list))
   ) # force ZCTA and zcta_list to be characters
@@ -143,7 +143,7 @@ get_data <- function(dataframe, zcta_list, year){
 #' @param year Census year for requested geometries
 #' @param feature Name of feature to be visualized (can be tornado_id, mag,
 #' fatality, injury)
-#' @note Feature name should align with column name in dataset
+#' @note Feature name should align with column name in dataset, must be string
 #'
 #' @return A map of the distribution of feature of interest across selected ZCTAs
 #'
@@ -151,6 +151,14 @@ get_data <- function(dataframe, zcta_list, year){
 #'
 #' @importFrom dplyr %>%
 map_exposure <- function(zcta_list, year, feature){
+
+  feature_labels <- c(
+    tornado_id = "Number of Tornadoes",
+    mag = "Average Tornado Magnitude",
+    fat = "Total Fatalities (Per Tornado)",
+    inj = "Total Injuries (Per Tornado)"
+  )
+
   subset <- get_data(zt, zcta_list, year)
 
   fill_data <- generate_feature(subset, feature)
@@ -169,7 +177,7 @@ map_exposure <- function(zcta_list, year, feature){
     ) +
     ggplot2::scale_fill_viridis_c(na.value = "transparent") +
     ggplot2::labs( # eventually modify so that the fill value isn't just the column name
-      fill = feature
+      fill = feature_labels[[feature]]
     ) + ggplot2::theme_void()
 }
 
@@ -206,5 +214,8 @@ add_tracks <- function(zcta_list, year, plot){
   )
   plot +
     ggplot2::geom_sf(data = affected_tracks,
-                     color = "red")
+                     ggplot2::aes(color = mag)
+    ) +
+    ggplot2::scale_color_viridis_c() +
+    ggplot2::labs(color = "Magnitude")
 }
