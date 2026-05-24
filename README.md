@@ -2,11 +2,15 @@
 
 # How to use the tornadoexposure package
 
+## Set-up
+
+## Data
+
 ## Functions
 
-### get_data
+### Getting ZCTA-level exposure data (```get_data```)
 
-### map_exposure
+### Mapping ZCTA-level exposures (```map_exposure```)
 ![](figures/joplin_count_singleyr.png)
 
 #### Features of interest
@@ -15,5 +19,6 @@
 ![](figures/joplin_fat.png)
 ![](figures/joplin_inj.png)
 
-### add_tracks
+### Mapping tornado tracks (```add_tracks```)
+Finally, tornado tracks can be overlaid on any ZCTA-level exposure map created by ```map_exposure```.
 ![](figures/joplin_mag_tracks.png)
