@@ -18,6 +18,19 @@ tornados <- tornados %>%
 tornados <- tornados %>%
   filter(yr > 1995)
 
+# remove rows with missing coordinates
+tornados <- tornados %>%
+  filter(
+    !is.na(slon),
+    !is.na(slat),
+    !is.na(elon),
+    !is.na(elat)
+  )
+
+# remove degenerate tracks
+tornados <- tornados %>%
+  filter(!(slon == elon & slat == elat))
+
 # create wkt column from start/end coordinate pairs
 tornados <- tornados %>%
   mutate(geometry = sprintf("LINESTRING(%f %f, %f %f)",
@@ -27,6 +40,16 @@ tornados <- tornados %>%
 # create tornado track linestring geometries from wkt column
 tornado_tracks <- st_as_sf(tornados, wkt = "geometry", crs = 4326)
 
+# repair any remaining invalid geometries
+tornado_tracks <- st_make_valid(tornado_tracks)
+
+# keep only valid LINESTRING geometries
+tornado_tracks <- tornado_tracks %>%
+  filter(
+    st_is_valid(.),
+    st_geometry_type(.) == "LINESTRING"
+  )
+
 # transform geometries to appropriate crs
 tornado_tracks <- sf::st_transform(
   tornado_tracks,
@@ -34,7 +57,8 @@ tornado_tracks <- sf::st_transform(
 )
 
 # limit to relevant columns
-keep_cols <- c("tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat", "geometry")
+keep_cols <- c(
+  "tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat", "geometry")
 tornado_tracks <- tornado_tracks %>%
   select(all_of(keep_cols))
 

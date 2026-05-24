@@ -4,9 +4,6 @@ library(sf)
 library(tigris)
 
 load("data/tornado_tracks.rda")
-# sanity confirmation of CRS
-tornado_tracks <- st_set_crs(tornado_tracks, 4326)
-tornado_tracks <- st_transform(tornado_tracks, 3857)
 
 # get Census ZCTA boundary files from Tigris
 zctas_2000 <- zctas(year = 2000)
@@ -35,7 +32,7 @@ zt <- zt %>%
     ZCTA = coalesce(ZCTA5CE00, ZCTA5CE10, ZCTA5CE20)
   )
 keep_cols <- c("tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat",
-               "ZCTA") #, "geometry")
+               "ZCTA")
 zt <- zt %>%
   select(all_of(keep_cols))
 
