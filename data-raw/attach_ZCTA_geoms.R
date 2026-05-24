@@ -28,11 +28,17 @@ zt_2020 <- st_join(tornados_2020, zctas_2020)
 # bind into a single dataframe
 zt <- bind_rows(zt_2000, zt_2010, zt_2020)
 zt <- zt %>%
-  mutate(
+  mutate( # coalesce into one ZCTA column
     ZCTA = coalesce(ZCTA5CE00, ZCTA5CE10, ZCTA5CE20)
+  ) %>%
+  mutate( # coalesce area columns
+    area = coalesce(ALAND00, ALAND10, ALAND20)
+  ) %>%
+  mutate( # calculate the percentage of each ZCTA area affected by each tornado
+    area_pct_affected = (area_m2 / area) * 100
   )
 keep_cols <- c("tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat",
-               "ZCTA")
+               "area_pct_affected", "ZCTA")
 zt <- zt %>%
   select(all_of(keep_cols))
 
