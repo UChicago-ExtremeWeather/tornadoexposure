@@ -4,12 +4,12 @@
 \alias{get_geometry}
 \title{Retrieve ZCTA geometries from Tigris}
 \usage{
-get_geometry(zcta_list, yr)
+get_geometry(zcta_list, year_range)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
-\item{yr}{Census year for requested geometries}
+\item{year_range}{Range of years across which data should be aggregated}
 }
 \value{
 An sf object containing ZCTA boundary geometries

@@ -15,7 +15,8 @@ BugReports: https://github.com/hailhan/tornadoexposure/issues
 Imports:
   ggplot2,
   sf,
-  tigris
+  tigris,
+  scico
 Depends: 
     R (>= 3.5)
 RoxygenNote: 7.3.3

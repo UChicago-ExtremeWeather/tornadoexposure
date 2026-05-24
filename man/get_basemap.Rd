@@ -4,12 +4,12 @@
 \alias{get_basemap}
 \title{Generate basemap for ZCTA boundaries}
 \usage{
-get_basemap(zcta_list, year)
+get_basemap(zcta_list, year_range)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
-\item{year}{Census year for requested geometries}
+\item{year_range}{Range of years across which data should be aggregated}
 }
 \value{
 A mapping of boundaries for requested ZCTAs

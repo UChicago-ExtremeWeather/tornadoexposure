@@ -4,12 +4,12 @@
 \alias{map_exposure}
 \title{Create a choropleth map for variable of interest across selected ZCTAs}
 \usage{
-map_exposure(zcta_list, year, feature)
+map_exposure(zcta_list, year_range, feature)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
-\item{year}{Census year for requested geometries}
+\item{year_range}{Range of years across which data should be aggregated}
 
 \item{feature}{Name of feature to be visualized (can be tornado_id, mag,
 fatality, injury)}

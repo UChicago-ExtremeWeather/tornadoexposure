@@ -4,12 +4,12 @@
 \alias{get_data}
 \title{Generates a dataframe containing all exposures for a given set of ZCTA-years}
 \usage{
-get_data(zcta_list, year)
+get_data(zcta_list, year_range)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
-\item{year}{Census year for requested geometries}
+\item{year_range}{Range of years across which data should be aggregated}
 }
 \value{
 A dataframe with exposure data for selected ZCTAs

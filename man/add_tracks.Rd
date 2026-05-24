@@ -4,12 +4,12 @@
 \alias{add_tracks}
 \title{Overlay tornado tracks on top of ZCTA boundary maps}
 \usage{
-add_tracks(zcta_list, year, plot)
+add_tracks(zcta_list, year_range, plot)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
-\item{year}{Census year for requested geometries}
+\item{year_range}{Range of years across which data should be aggregated}
 
 \item{plot}{An sf plot object}
 }

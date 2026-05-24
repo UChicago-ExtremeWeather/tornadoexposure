@@ -6,17 +6,25 @@
 #' @param zcta_list Vector of ZCTAs (or ZCTA prefixes)
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
-#' @param yr Census year for requested geometries
+#' @param year_range Range of years across which data should be aggregated
 #'
 #' @return An sf object containing ZCTA boundary geometries
 #'
 #' @keywords internal
-get_geometry <- function(zcta_list, yr){
+get_geometry <- function(zcta_list, year_range){
   # default to closest year in tigris
   valid_years <- c(2000, 2010, 2020)
 
+  if (length(year_range) == 1) {
+    years <- year_range
+  } else {
+    years <- seq(min(year_range), max(year_range))
+  }
+
+  mid_year <- median(years)
+
   # default to 2000 for any year before 2000
-  year_plot <- max(valid_years[valid_years <= yr], na.rm = TRUE)
+  year_plot <- max(valid_years[valid_years <= mid_year], na.rm = TRUE)
   if (is.infinite(year_plot)) year_plot <- 2000
 
   boundary <- tigris::zctas(
@@ -43,13 +51,13 @@ get_geometry <- function(zcta_list, yr){
 #' @param zcta_list Vector of ZCTAs (or ZCTA prefixes)
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
-#' @param year Census year for requested geometries
+#' @param year_range Range of years across which data should be aggregated
 #'
 #' @return A mapping of boundaries for requested ZCTAs
 #'
 #' @keywords internal
-get_basemap <- function(zcta_list, year){
-  boundary_geom <- get_geometry(zcta_list, year)
+get_basemap <- function(zcta_list, year_range){
+  boundary_geom <- get_geometry(zcta_list, year_range)
   ggplot2::ggplot(data = boundary_geom) +
     ggplot2::geom_sf(fill = NA, color = "black") +
     ggplot2::theme_void()
@@ -115,17 +123,17 @@ generate_feature <- function(exposed_zctas,
 #' @param zcta_list Vector of ZCTAs (or ZCTA prefixes)
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
-#' @param year Census year for requested geometries
+#' @param year_range Range of years across which data should be aggregated
 #'
 #' @return A dataframe with exposure data for selected ZCTAs
 #'
 #' @export
 #'
 #' @importFrom dplyr %>%
-get_data <- function(zcta_list, year){
+get_data <- function(zcta_list, year_range){
 
   subset <- zt %>% dplyr::filter(
-    yr == year,
+    yr %in% year_range,
     stringr::str_starts(as.character(ZCTA), as.character(zcta_list))
   ) # force ZCTA and zcta_list to be characters
 
@@ -140,7 +148,7 @@ get_data <- function(zcta_list, year){
 #' @param zcta_list Vector of ZCTAs (or ZCTA prefixes)
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
-#' @param year Census year for requested geometries
+#' @param year_range Range of years across which data should be aggregated
 #' @param feature Name of feature to be visualized (can be tornado_id, mag,
 #' fatality, injury)
 #' @note Feature name should align with column name in dataset, must be string
@@ -150,7 +158,7 @@ get_data <- function(zcta_list, year){
 #' @export
 #'
 #' @importFrom dplyr %>%
-map_exposure <- function(zcta_list, year, feature){
+map_exposure <- function(zcta_list, year_range, feature){
 
   feature_labels <- c(
     tornado_id = "Number of Tornadoes",
@@ -159,25 +167,32 @@ map_exposure <- function(zcta_list, year, feature){
     inj = "Total Injuries (Per Tornado)"
   )
 
-  subset <- get_data(zt, zcta_list, year)
+  subset <- get_data(zcta_list, year_range)
 
   fill_data <- generate_feature(subset, feature)
 
-  boundary_geom <- get_geometry(zcta_list, year)
+  boundary_geom <- get_geometry(zcta_list, year_range)
 
   plot_data <- boundary_geom %>%
     dplyr::left_join(
       sf::st_drop_geometry(fill_data),
       by = "ZCTA")
 
+  yr_label <- if (length(year_range) == 1 || min(year_range) == max(year_range)) {
+    as.character(min(year_range))
+  } else {
+    paste0(min(year_range), "–", max(year_range))
+  }
+
   ggplot2::ggplot(plot_data) +
     ggplot2::geom_sf(
       ggplot2::aes(fill = value),
       color = "black"
     ) +
-    ggplot2::scale_fill_viridis_c(na.value = "transparent") +
+    scico::scale_fill_scico(palette = "lajolla", na.value = "transparent", direction = -1) +
     ggplot2::labs( # eventually modify so that the fill value isn't just the column name
-      fill = feature_labels[[feature]]
+      fill = feature_labels[[feature]],
+      title = paste0("Tornado Exposures, ", yr_label)
     ) + ggplot2::theme_void()
 }
 
@@ -189,7 +204,7 @@ map_exposure <- function(zcta_list, year, feature){
 #' @param zcta_list Vector of ZCTAs (or ZCTA prefixes)
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
-#' @param year Census year for requested geometries
+#' @param year_range Range of years across which data should be aggregated
 #' @param plot An sf plot object
 #' @note Can be a choropleth created by map_exposure or unfilled ZCTA boundaries
 #' from get_geometry
@@ -199,12 +214,12 @@ map_exposure <- function(zcta_list, year, feature){
 #' @export
 #'
 #' @importFrom dplyr %>%
-add_tracks <- function(zcta_list, year, plot){
+add_tracks <- function(zcta_list, year_range, plot){
 
-  zcta_subset <- get_data(zt, zcta_list, year)
+  zcta_subset <- get_data(zcta_list, year_range)
 
   tracks_subset <- tornado_tracks %>%
-    dplyr::filter(yr == year) %>%
+    dplyr::filter(yr %in% year_range) %>%
     sf::st_transform(sf::st_crs(zcta_subset))
 
   affected_tracks <- sf::st_filter(
@@ -216,6 +231,6 @@ add_tracks <- function(zcta_list, year, plot){
     ggplot2::geom_sf(data = affected_tracks,
                      ggplot2::aes(color = mag)
     ) +
-    ggplot2::scale_color_viridis_c() +
+    ggplot2::scale_color_viridis_c(option = "plasma", direction = -1) +
     ggplot2::labs(color = "Magnitude")
 }
