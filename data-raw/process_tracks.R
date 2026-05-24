@@ -50,15 +50,28 @@ tornado_tracks <- tornado_tracks %>%
     st_geometry_type(.) == "LINESTRING"
   )
 
-# transform geometries to appropriate crs
+# transform geometries to appropriate crs (meters)
 tornado_tracks <- sf::st_transform(
   tornado_tracks,
   3857
 )
 
+# create column to store track width in meters
+tornado_tracks <- tornado_tracks %>%
+  mutate(width_m = wid * 0.9144)
+
+# create buffer to create track polygons using width
+buf <- st_buffer(
+  st_geometry(tornado_tracks),
+  dist = as.numeric(tornado_tracks$width_m) / 2
+)
+
+# calculate track area (in meters squared)
+tornado_tracks$area_m2 <- as.numeric(st_area(buf))
+
 # limit to relevant columns
 keep_cols <- c(
-  "tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat", "geometry")
+  "tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat", "area_m2", "geometry")
 tornado_tracks <- tornado_tracks %>%
   select(all_of(keep_cols))
 
