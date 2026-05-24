@@ -76,9 +76,10 @@ get_basemap <- function(zcta_list, year_range){
 #'
 #' @keywords internal
 generate_feature <- function(exposed_zctas,
-                             feature = c("tornado_id", "mag", "fat", "inj")){
+                             feature = c("tornado_id", "magnitude",
+                                         "total_fatality", "total_injury")){
   feature <- match.arg(feature)
-  allowed <- c("tornado_id", "mag", "fat", "inj")
+  allowed <- c("tornado_id", "magnitude", "total_fatality", "total_injury")
 
   if (!feature %in% allowed) {
     stop("feature must be one of: ", paste(allowed, collapse = ", "))
@@ -87,7 +88,7 @@ generate_feature <- function(exposed_zctas,
   agg <- exposed_zctas %>%
     dplyr::group_by(ZCTA)
 
-  if (feature == "mag") {
+  if (feature == "magnitude") {
 
     agg <- agg %>%
       dplyr::summarise(
@@ -132,8 +133,8 @@ generate_feature <- function(exposed_zctas,
 #' @importFrom dplyr %>%
 get_data <- function(zcta_list, year_range){
 
-  subset <- zt %>% dplyr::filter(
-    yr %in% year_range,
+  subset <- zcta_tracks %>% dplyr::filter(
+    year %in% year_range,
     stringr::str_starts(as.character(ZCTA), as.character(zcta_list))
   ) # force ZCTA and zcta_list to be characters
 
@@ -149,8 +150,8 @@ get_data <- function(zcta_list, year_range){
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
 #' @param year_range Range of years across which data should be aggregated
-#' @param feature Name of feature to be visualized (can be tornado_id, mag,
-#' fatality, injury)
+#' @param feature Name of feature to be visualized (can be tornado_id, magnitude,
+#' total_fatality, total_injury)
 #' @note Feature name should align with column name in dataset, must be string
 #'
 #' @return A map of the distribution of feature of interest across selected ZCTAs
@@ -162,9 +163,9 @@ map_exposure <- function(zcta_list, year_range, feature){
 
   feature_labels <- c(
     tornado_id = "Number of Tornadoes",
-    mag = "Average Tornado Magnitude",
-    fat = "Total Fatalities (Per Tornado)",
-    inj = "Total Injuries (Per Tornado)"
+    magnitude = "Average Tornado Magnitude",
+    total_fatality = "Total Fatalities (Per Tornado)",
+    total_injury = "Total Injuries (Per Tornado)"
   )
 
   subset <- get_data(zcta_list, year_range)
@@ -218,8 +219,8 @@ add_tracks <- function(zcta_list, year_range, plot){
 
   zcta_subset <- get_data(zcta_list, year_range)
 
-  tracks_subset <- tornado_tracks %>%
-    dplyr::filter(yr %in% year_range) %>%
+  tracks_subset <- zcta_tracks %>%
+    dplyr::filter(year %in% year_range) %>%
     sf::st_transform(sf::st_crs(zcta_subset))
 
   affected_tracks <- sf::st_filter(
@@ -229,7 +230,7 @@ add_tracks <- function(zcta_list, year_range, plot){
   )
   plot +
     ggplot2::geom_sf(data = affected_tracks,
-                     ggplot2::aes(color = mag)
+                     ggplot2::aes(color = magnitude)
     ) +
     ggplot2::scale_color_viridis_c(option = "plasma", direction = -1) +
     ggplot2::labs(color = "Magnitude")
