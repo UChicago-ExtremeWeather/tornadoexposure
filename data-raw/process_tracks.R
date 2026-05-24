@@ -75,5 +75,10 @@ keep_cols <- c(
 tornado_tracks <- tornado_tracks %>%
   select(all_of(keep_cols))
 
+# rename columns
+tornado_tracks <- tornado_tracks %>%
+  rename(year = yr, month = mo, day = dy, magnitude = mag, total_injury = inj,
+         total_fatality = fat, tornado_area_m2 = area_m2)
+
 # write to clean data folder
 usethis::use_data(tornado_tracks, overwrite = TRUE)

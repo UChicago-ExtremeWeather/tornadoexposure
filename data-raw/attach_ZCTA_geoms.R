@@ -11,9 +11,9 @@ zctas_2010 <- zctas(year = 2010)
 zctas_2020 <- zctas(year = 2020)
 
 # split tornado tracks into chunks for each Census file
-tornados_2000 <- tornado_tracks %>% filter(yr < 2010)
-tornados_2010 <- tornado_tracks %>% filter(yr >= 2010 & yr < 2020)
-tornados_2020 <- tornado_tracks %>% filter(yr >= 2020)
+tornados_2000 <- tornado_tracks %>% filter(year < 2010)
+tornados_2010 <- tornado_tracks %>% filter(year >= 2010 & year < 2020)
+tornados_2020 <- tornado_tracks %>% filter(year >= 2020)
 
 # align CRS (tornado_track in ESPG:3857)
 zctas_2000 <- st_transform(zctas_2000, 3857)
@@ -32,13 +32,14 @@ zt <- zt %>%
     ZCTA = coalesce(ZCTA5CE00, ZCTA5CE10, ZCTA5CE20)
   ) %>%
   mutate( # coalesce area columns
-    area = coalesce(ALAND00, ALAND10, ALAND20)
+    zcta_area = coalesce(ALAND00, ALAND10, ALAND20)
   ) %>%
   mutate( # calculate the percentage of each ZCTA area affected by each tornado
-    area_pct_affected = (area_m2 / area) * 100
+    area_pct_affected = (tornado_area_m2 / zcta_area) * 100
   )
-keep_cols <- c("tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat",
-               "area_pct_affected", "ZCTA")
+
+keep_cols <- c("tornado_id", "date", "year", "month", "day", "magnitude",
+               "total_injury", "total_fatality","area_pct_affected", "ZCTA")
 zt <- zt %>%
   select(all_of(keep_cols))
 
