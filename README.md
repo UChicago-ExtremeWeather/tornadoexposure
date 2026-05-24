@@ -57,6 +57,7 @@ This command would produce the following plot:
 ```
 plot <- map_exposure(c(648), 2011, "tornado_id")
 ```
+If no value is passed in for exposure characteristic, the function will automatically return a blank map containing the boundaries for the requested ZCTA codes.
 
 #### Exposure characteristics
 The ```tornadoexposure``` package supports ZCTA-level aggregation and mapping of the following exposure characteristics across input years:
@@ -102,5 +103,14 @@ This command would produce the following plot:
 ![](figures/joplin_inj.png)
 
 ### Mapping tornado tracks (```add_tracks```)
-Finally, tornado tracks can be overlaid on any ZCTA-level exposure map created by ```map_exposure```.
+Finally, tornado tracks can be overlaid on any ZCTA-level exposure map created by ```map_exposure```. For instance, if you wanted to overlay the tornado tracks on top of a map showing the average magnitude for all tornadoes affecting ZCTAs beginning with the prefix ```648``` between the years 2010-2015, you would use the following commands:
+
+```
+mag_plot <- map_exposure(c(648), 2010:2015, "magnitude")
+add_tracks(c(648), 2010:2015, mag_plot)
+```
+This command would produce the following plot:
+
 ![](figures/joplin_mag_tracks.png)
+
+If you wish to simply plot the tracks over a blank map of ZCTA boundaries, you can create a blank plot object using ```map_exposure``` without specifying an exposure characteristic, and then pass that into ```add_tracks```.
