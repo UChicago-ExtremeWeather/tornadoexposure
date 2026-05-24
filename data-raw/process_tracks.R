@@ -9,10 +9,14 @@ tornados <- read_csv("https://www.spc.noaa.gov/wcm/data/1950-2025_all_tornadoes.
 tornados <- tornados %>%
   mutate(tornado_id = paste(yr, om, sep = "_"))
 
-# drop all storms < EF3
-# keeps dataset in safe range for GitHub, retains only storms with health effects
+# drop all EF0s
 tornados <- tornados %>%
-  filter(mag > 2)
+  filter(mag > 0)
+
+# restrict dataset to storms after 1995 (Doppler radar improvement)
+# keeps dataset in safe range for GitHub
+tornados <- tornados %>%
+  filter(yr > 1995)
 
 # create wkt column from start/end coordinate pairs
 tornados <- tornados %>%
