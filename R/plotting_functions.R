@@ -135,11 +135,17 @@ generate_feature <- function(exposed_zctas,
 #' @importFrom dplyr %>%
 get_data <- function(zcta_list, year_range){
 
-  subset <- zcta_tracks %>% dplyr::filter(
-    year %in% year_range,
-    stringr::str_starts(as.character(ZCTA), as.character(zcta_list))
-  ) # force ZCTA and zcta_list to be characters
+  zcta_list <- as.character(zcta_list)
 
+  subset <- zcta_tracks %>%
+    dplyr::filter(
+      year %in% year_range,
+      purrr::map_lgl(
+        as.character(ZCTA),
+        ~ any(startsWith(.x, zcta_list))
+      )
+    )
+  subset
 }
 
 #' Create a choropleth map for variable of interest across selected ZCTAs
