@@ -1,16 +1,27 @@
 # About the ```tornadoexposure``` package
+Welcome! This package was created to allow users to interactively explore tornado exposure data in the United States. By leveraging publicly available tornado exposure data published by NOAA, along with ZCTA boundary data maintained by the Census Bureau, this package gives users the opportunity to create datasets and map exposure characteristics for all tornadoes of magnitude EF 1 and higher recorded in the United States between 1996-2025.
 
 # How to use the ```tornadoexposure``` package
 
 ## Set-up
+This package can be installed using the following command:
+```remotes::install_github("hailhan/tornadoexposure")```
+
+Once you have installed the package, you can load it into your R session using:
+```library(tornadoexposure)```
 
 ## Data
 This package includes a built-in dataset called ```zcta_tracks```, which is a modified version of the [NOAA Tornado Tracks dataset](https://www.spc.noaa.gov/gis/svrgis/). The dataset retains only tornadoes recorded after 1995 with a magnitude greater than EF0. The raw coordinate data for the tornado tracks was converted into Linestring geometries, which provide the exact locations of and paths taken by each tornado. The data was then merged with ZCTA boundary shapefile data from the Census Bureau, accessed using the ```tigris``` package. The tornado track Linestring geometries were overlaid on top of the ZCTA boundaries to identify which ZCTAs were intersected by each tornado. Finally, the area of the tornado track was compared to the total area of each exposed ZCTA to determine the percentage of ZCTA land area directly affected by each tornado. 
+Further documentation for this dataset can be found by running the command ```?zcta_tracks``` in the R console.
+
+## Updating the package data
+NOAA updates the Tornado Tracks dataset annually. You may wish to update the package with the most recent version of this data. To do so, simply replace the url used to create ```tornados``` in [process_tracks](data-raw/process_tracks.R) with the download link for the newest version of the dataset available at [NOAA's website](https://www.spc.noaa.gov/wcm/#data).
 
 ## Functions
 All functions in this package require a set of Zip Code Tabulation Area (ZCTA) codes and a range of years across which exposure data should be aggregated. 
 ZCTA codes must be passed into the functions as a vector. ZCTA codes can be passed in as any 1-5 digit string of numbers, and the functions will match all ZCTAs that begin with that string of numbers (for instance, pass in the list ```c(6, 4, 2)``` to return exposures affecting all ZCTAs with codes that begin with 6, 4, or 2. Alternatively, pass in the list ```c(60304, 60637)``` to return exposures only affecting ZCTAs 60304 and 60637.) Input lists of ZCTA codes can contain codes of different lengths (eg. ```c(6, 90210, 486)``` would be acceptable input).
 Years must be input as a range of integers. Ranges can be as small as a single year (eg. ```2011```) or as large as the full range of years included in the dataset (as of version 0.1.0, ```1996:2025```).
+Further documentation for these functions can be found by running the command ```?{function_name}``` in the R console.
 
 ### Getting ZCTA-level exposure data (```get_data```)
 Given a list of ZCTA codes and a year or range of years, this function produces a dataframe containing all tornadoexposures recorded in the ZCTAs of interest during the specified timeframe. The output dataframe contains the following exposure characteristics:
