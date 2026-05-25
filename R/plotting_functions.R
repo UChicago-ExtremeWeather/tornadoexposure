@@ -55,6 +55,8 @@ get_geometry <- function(zcta_list, year_range){
 #'
 #' @return A mapping of boundaries for requested ZCTAs
 #'
+#' @import sf
+#'
 #' @keywords internal
 get_basemap <- function(zcta_list, year_range){
   boundary_geom <- get_geometry(zcta_list, year_range)
