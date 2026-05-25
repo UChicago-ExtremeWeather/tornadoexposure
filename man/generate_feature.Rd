@@ -4,7 +4,10 @@
 \alias{generate_feature}
 \title{Aggregates a feature of interest across ZCTAs for given timeframe}
 \usage{
-generate_feature(exposed_zctas, feature = c("tornado_id", "mag", "fat", "inj"))
+generate_feature(
+  exposed_zctas,
+  feature = c("tornado_id", "magnitude", "total_fatality", "total_injury")
+)
 }
 \arguments{
 \item{exposed_zctas}{Dataframe of tornado-level exposures}

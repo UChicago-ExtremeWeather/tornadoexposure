@@ -4,15 +4,15 @@
 \alias{map_exposure}
 \title{Create a choropleth map for variable of interest across selected ZCTAs}
 \usage{
-map_exposure(zcta_list, year_range, feature)
+map_exposure(zcta_list, year_range, feature = NULL)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
 \item{year_range}{Range of years across which data should be aggregated}
 
-\item{feature}{Name of feature to be visualized (can be tornado_id, mag,
-fatality, injury)}
+\item{feature}{Name of feature to be visualized (can be "tornado_id", "magnitude",
+"total_fatality", "total_injury")}
 }
 \value{
 A map of the distribution of feature of interest across selected ZCTAs
@@ -27,5 +27,8 @@ ZCTAs/prefixes can be passed in as characters or integers
 
 ZCTAs/prefixes can be 1-5 characters
 
-Feature name should align with column name in dataset, must be string
+Feature name should be passed in as a string in quotations
+
+If not feature name is supplied, function will return an unfilled map
+of the requested ZCTA boundaries
 }

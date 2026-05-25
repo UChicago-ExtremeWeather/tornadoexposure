@@ -2,7 +2,8 @@
 % Please edit documentation in R/plotting_functions.R
 \name{get_data}
 \alias{get_data}
-\title{Generates a dataframe containing all exposures for a given set of ZCTA-years}
+\title{Generates a dataframe containing all exposures for a given set of ZCTAs over
+a specified range of years}
 \usage{
 get_data(zcta_list, year_range)
 }
@@ -12,11 +13,12 @@ get_data(zcta_list, year_range)
 \item{year_range}{Range of years across which data should be aggregated}
 }
 \value{
-A dataframe with exposure data for selected ZCTAs
+A dataframe containing exposure data for selected ZCTAs across
+specified range of years
 }
 \description{
-Takes a list of US ZCTA codes, a year, and a feature, and returns a dataframe
-containing all exposure data for the requested ZCTA boundaries
+Takes a list of US ZCTA codes and a year (or range of years), and returns a
+dataframe containing all exposure data for the requested ZCTA boundaries
 }
 \note{
 ZCTAs/prefixes can be passed in as characters or integers

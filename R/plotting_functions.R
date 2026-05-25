@@ -116,17 +116,19 @@ generate_feature <- function(exposed_zctas,
   agg
 }
 
-#' Generates a dataframe containing all exposures for a given set of ZCTA-years
+#' Generates a dataframe containing all exposures for a given set of ZCTAs over
+#' a specified range of years
 #'
-#' Takes a list of US ZCTA codes, a year, and a feature, and returns a dataframe
-#' containing all exposure data for the requested ZCTA boundaries
+#' Takes a list of US ZCTA codes and a year (or range of years), and returns a
+#' dataframe containing all exposure data for the requested ZCTA boundaries
 #'
 #' @param zcta_list Vector of ZCTAs (or ZCTA prefixes)
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
 #' @param year_range Range of years across which data should be aggregated
 #'
-#' @return A dataframe with exposure data for selected ZCTAs
+#' @return A dataframe containing exposure data for selected ZCTAs across
+#' specified range of years
 #'
 #' @export
 #'
@@ -150,9 +152,11 @@ get_data <- function(zcta_list, year_range){
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
 #' @param year_range Range of years across which data should be aggregated
-#' @param feature Name of feature to be visualized (can be tornado_id, magnitude,
-#' total_fatality, total_injury)
-#' @note Feature name should align with column name in dataset, must be string
+#' @param feature Name of feature to be visualized (can be "tornado_id", "magnitude",
+#' "total_fatality", "total_injury")
+#' @note Feature name should be passed in as a string in quotations
+#' @note If not feature name is supplied, function will return an unfilled map
+#' of the requested ZCTA boundaries
 #'
 #' @return A map of the distribution of feature of interest across selected ZCTAs
 #'
@@ -241,8 +245,7 @@ map_exposure <- function(zcta_list, year_range, feature=NULL){
 #' @note ZCTAs/prefixes can be 1-5 characters
 #' @param year_range Range of years across which data should be aggregated
 #' @param plot An sf plot object
-#' @note Can be a choropleth created by map_exposure or unfilled ZCTA boundaries
-#' from get_geometry
+#' @note Can be a choropleth or map of ZCTA boundaries created by ```map_exposure```
 #'
 #' @return A map with tornado tracks overlaid
 #'

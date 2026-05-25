@@ -25,6 +25,5 @@ ZCTAs/prefixes can be passed in as characters or integers
 
 ZCTAs/prefixes can be 1-5 characters
 
-Can be a choropleth created by map_exposure or unfilled ZCTA boundaries
-from get_geometry
+Can be a choropleth or map of ZCTA boundaries created by ```map_exposure```
 }
