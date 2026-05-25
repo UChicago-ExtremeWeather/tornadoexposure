@@ -14,9 +14,11 @@ URL: https://github.com/hailhan/tornadoexposure
 BugReports: https://github.com/hailhan/tornadoexposure/issues
 Imports:
   ggplot2,
-  sf,
+  sf (>= 1.0-15),
+  dplyr (>= 1.1.0),
   tigris,
-  scico
+  scico,
+  purrr
 Depends: 
     R (>= 3.5)
 RoxygenNote: 7.3.3
