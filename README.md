@@ -7,6 +7,8 @@ Welcome! This package was created to allow users to interactively explore tornad
 This package can be installed using the following command:
 ```remotes::install_github("hailhan/tornadoexposure")```
 
+If the package has been updated since initial installation, you may want to re-run the above code to ensure that you have the most up-to-date version of the package installed.
+
 Once you have installed the package, you can load it into your R session using:
 ```library(tornadoexposure)```
 
