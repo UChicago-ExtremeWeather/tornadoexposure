@@ -139,11 +139,15 @@ get_data <- function(zcta_list, year_range){
 
   zcta_list <- as.character(zcta_list)
 
-  keep <- zcta_tracks$year %in% year_range &
-    purrr::map_lgl(
-      as.character(zcta_tracks$ZCTA),
-      ~ any(startsWith(.x, zcta_list))
-    )
+  keep <- (
+    zcta_tracks$year %in% year_range &
+      purrr::map_lgl(
+        as.character(zcta_tracks$ZCTA),
+        ~ any(startsWith(.x, zcta_list))
+      )
+  )
+
+  keep[is.na(keep)] <- FALSE
 
   subset <- zcta_tracks[keep, ]
 
