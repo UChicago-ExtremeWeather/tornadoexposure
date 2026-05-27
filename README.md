@@ -109,7 +109,7 @@ This command would produce the following plot:
 To explore the total injuries per tornado, you would input ```"total_injury"``` as the exposure characteristic of interest. For example, to visualize the total number of injuries associated with tornadoes that occurred in ZCTAs beginning with the prefix ```648``` between the years 2010-2015, you would use the following command:
 
 ```
-map_exposure(c(648), 2010:2015, "total_fatality")
+map_exposure(c(648), 2010:2015, "total_injury")
 ```
 This command would produce the following plot:
 
