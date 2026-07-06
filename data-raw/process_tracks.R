@@ -72,14 +72,15 @@ tornado_tracks$area_m2 <- as.numeric(st_area(buf))
 
 # limit to relevant columns
 keep_cols <- c(
-  "tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat", "area_m2", "geometry")
+  "tornado_id", "date", "yr", "mo", "dy", "mag", "inj", "fat", "loss",
+  "area_m2", "geometry")
 tornado_tracks <- tornado_tracks %>%
   select(all_of(keep_cols))
 
 # rename columns
 tornado_tracks <- tornado_tracks %>%
   rename(year = yr, month = mo, day = dy, magnitude = mag, total_injury = inj,
-         total_fatality = fat, tornado_area_m2 = area_m2)
+         total_fatality = fat, tornado_area_m2 = area_m2, property_loss = loss)
 
 # get Census ZCTA boundary files from Tigris
 zctas_2000 <- zctas(year = 2000)
@@ -115,7 +116,8 @@ zcta_tracks <- zcta_tracks %>%
   )
 
 keep_cols <- c("tornado_id", "date", "year", "month", "day", "magnitude",
-               "total_injury", "total_fatality","area_pct_affected", "ZCTA")
+               "total_injury", "total_fatality", "property_loss",
+               "area_pct_affected", "ZCTA")
 zcta_tracks <- zcta_tracks %>%
   select(all_of(keep_cols))
 
