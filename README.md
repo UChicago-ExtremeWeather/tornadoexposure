@@ -23,6 +23,7 @@ NOAA updates the Tornado Tracks dataset annually. You may wish to update the pac
 All functions in this package require a set of Zip Code Tabulation Area (ZCTA) codes and a range of years across which exposure data should be aggregated. 
 ZCTA codes must be passed into the functions as a vector. ZCTA codes can be passed in as any 1-5 digit string of numbers, and the functions will match all ZCTAs that begin with that string of numbers (for instance, pass in the list ```c(6, 4, 2)``` to return exposures affecting all ZCTAs with codes that begin with 6, 4, or 2. Alternatively, pass in the list ```c(60304, 60637)``` to return exposures only affecting ZCTAs 60304 and 60637.) Input lists of ZCTA codes can contain codes of different lengths (eg. ```c(6, 90210, 486)``` would be acceptable input).
 Years must be input as a range of integers. Ranges can be as small as a single year (eg. ```2011```) or as large as the full range of years included in the dataset (as of version 0.1.0, ```1996:2025```).
+Finally, users can filter results by magnitude using the optional argument ```mag_thresh```. A ```mag_thresh``` of 3 would return all tornadoes with an EF magnitude of 3 or greater. The default value for ```mag_thresh``` is 1, which returns all tornadoes in the dataset that meet the input criteria.
 Further documentation for these functions can be found by running the command ```?{function_name}``` in the R console.
 
 ### Getting ZCTA-level exposure data (```get_data```)

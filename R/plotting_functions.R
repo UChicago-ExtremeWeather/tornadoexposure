@@ -71,8 +71,8 @@ get_basemap <- function(zcta_list, year_range){
 #' and the sum or average (if magnitude) of the feature
 #'
 #' @param exposed_zctas Dataframe of tornado-level exposures
-#' @param feature The feature of interest (tornado_id for count, mag for magnitude,
-#' fat for fatalities, inj for injuries)
+#' @param feature The feature of interest (tornado_id for count, magnitude for magnitude,
+#' total_fatality for fatalities, total_injury for injuries)
 #'
 #' @return Dataframe of feature aggregated at ZCTA level
 #'
@@ -128,6 +128,7 @@ generate_feature <- function(exposed_zctas,
 #' @note ZCTAs/prefixes can be passed in as characters or integers
 #' @note ZCTAs/prefixes can be 1-5 characters
 #' @param year_range Range of years across which data should be aggregated
+#' @param mag_thresh Minimum magnitude of tornadoes to include (default is 1 to include all tornadoes in dataset)
 #'
 #' @return A dataframe containing exposure data for selected ZCTAs across
 #' specified range of years
@@ -135,12 +136,13 @@ generate_feature <- function(exposed_zctas,
 #' @export
 #'
 #' @importFrom dplyr %>%
-get_data <- function(zcta_list, year_range){
+get_data <- function(zcta_list, year_range, mag_thresh = 1){
 
   zcta_list <- as.character(zcta_list)
 
   keep <- (
     zcta_tracks$year %in% year_range &
+      zcta_tracks$magnitude >= mag_thresh &
       purrr::map_lgl(
         as.character(zcta_tracks$ZCTA),
         ~ any(startsWith(.x, zcta_list))
@@ -169,13 +171,14 @@ get_data <- function(zcta_list, year_range){
 #' @note Feature name should be passed in as a string in quotations
 #' @note If not feature name is supplied, function will return an unfilled map
 #' of the requested ZCTA boundaries
+#' @param mag_thresh Minimum magnitude of tornadoes to include (default is 1 to include all tornadoes in dataset)
 #'
 #' @return A map of the distribution of feature of interest across selected ZCTAs
 #'
 #' @export
 #'
 #' @importFrom dplyr %>%
-map_exposure <- function(zcta_list, year_range, feature=NULL){
+map_exposure <- function(zcta_list, year_range, feature = NULL, mag_thresh = 1){
 
   feature_labels <- c(
     tornado_id = "Number of Tornadoes",
@@ -184,7 +187,7 @@ map_exposure <- function(zcta_list, year_range, feature=NULL){
     total_injury = "Total Injuries (Per Tornado)"
   )
 
-  subset <- get_data(zcta_list, year_range)
+  subset <- get_data(zcta_list, year_range, mag_thresh)
 
   boundary_geom <- get_geometry(zcta_list, year_range)
 
@@ -258,6 +261,7 @@ map_exposure <- function(zcta_list, year_range, feature=NULL){
 #' @param year_range Range of years across which data should be aggregated
 #' @param plot An sf plot object
 #' @note Can be a choropleth or map of ZCTA boundaries created by ```map_exposure```
+#' @param mag_thresh Minimum magnitude of tornadoes to include (default is 1 to include all tornadoes in dataset)
 #'
 #' @return A map with tornado tracks overlaid
 #'
@@ -266,7 +270,7 @@ map_exposure <- function(zcta_list, year_range, feature=NULL){
 #' @importFrom dplyr %>%
 add_tracks <- function(zcta_list, year_range, plot){
 
-  zcta_subset <- get_data(zcta_list, year_range)
+  zcta_subset <- get_data(zcta_list, year_range, mag_thresh = 1)
 
   tracks_subset <- zcta_tracks %>%
     dplyr::filter(year %in% year_range) %>%

@@ -4,7 +4,7 @@
 \alias{map_exposure}
 \title{Create a choropleth map for variable of interest across selected ZCTAs}
 \usage{
-map_exposure(zcta_list, year_range, feature = NULL)
+map_exposure(zcta_list, year_range, feature = NULL, mag_thresh = 1)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
@@ -13,6 +13,8 @@ map_exposure(zcta_list, year_range, feature = NULL)
 
 \item{feature}{Name of feature to be visualized (can be "tornado_id", "magnitude",
 "total_fatality", "total_injury")}
+
+\item{mag_thresh}{Minimum magnitude of tornadoes to include (default is 1 to include all tornadoes in dataset)}
 }
 \value{
 A map of the distribution of feature of interest across selected ZCTAs

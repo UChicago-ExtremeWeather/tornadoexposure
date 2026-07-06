@@ -5,12 +5,14 @@
 \title{Generates a dataframe containing all exposures for a given set of ZCTAs over
 a specified range of years}
 \usage{
-get_data(zcta_list, year_range)
+get_data(zcta_list, year_range, mag_thresh = 1)
 }
 \arguments{
 \item{zcta_list}{Vector of ZCTAs (or ZCTA prefixes)}
 
 \item{year_range}{Range of years across which data should be aggregated}
+
+\item{mag_thresh}{Minimum magnitude of tornadoes to include (default is 1 to include all tornadoes in dataset)}
 }
 \value{
 A dataframe containing exposure data for selected ZCTAs across

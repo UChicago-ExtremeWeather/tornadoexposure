@@ -12,6 +12,8 @@ add_tracks(zcta_list, year_range, plot)
 \item{year_range}{Range of years across which data should be aggregated}
 
 \item{plot}{An sf plot object}
+
+\item{mag_thresh}{Minimum magnitude of tornadoes to include (default is 1 to include all tornadoes in dataset)}
 }
 \value{
 A map with tornado tracks overlaid

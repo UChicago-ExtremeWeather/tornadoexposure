@@ -12,8 +12,8 @@ generate_feature(
 \arguments{
 \item{exposed_zctas}{Dataframe of tornado-level exposures}
 
-\item{feature}{The feature of interest (tornado_id for count, mag for magnitude,
-fat for fatalities, inj for injuries)}
+\item{feature}{The feature of interest (tornado_id for count, magnitude for magnitude,
+total_fatality for fatalities, total_injury for injuries)}
 }
 \value{
 Dataframe of feature aggregated at ZCTA level
