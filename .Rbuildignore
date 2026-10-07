@@ -3,3 +3,6 @@
 ^data-raw$
 ^figures$
 ^README.md$
+^CLAUDE\.md$
+^LICENSE\.md$
+^scratch$

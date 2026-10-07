@@ -1,17 +1,23 @@
 Package: tornadoexposure
 Type: Package
 Title: Explore and Map ZCTA-Level Tornado Exposures in the United States
-Version: 0.1.0
-Author: Hailey Hansen
-Maintainer: <hailhan@uchicago.edu>
+Version: 0.2.0
+Authors@R: c(
+    person("Hailey", "Hansen", role = "aut"),
+    person("Jessy", "Nguyen", role = "aut"),
+    person("Prachi", "Sanghavi", role = "aut"),
+    person("Kate", "Burrows", email = "kburrows@uchicago.edu", role = c("aut", "cre")),
+    person("Institute for Climate and Sustainable Growth (ISCG)", role = "fnd"),
+    person("Center for Climate, Health and Society (CHAS)", role = "fnd"))
 Description: This package contains data and functions to allow users to explore
-    and map ZCTA-level tornado exposures in the United States from 1954-2025.
-    Data comes from the NOAA Severe Weather Database and the Census Bureau. 
-    Tornados of magnitude EF 1 and greater are included in the dataset.
+    and map ZCTA-level tornado exposures in the United States from 1996 to 2025.
+    Data comes from the NOAA Severe Weather Database and the Census Bureau.
+    Tornadoes of magnitude EF 1 and greater are included in the dataset.
+License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
-URL: https://github.com/hailhan/tornadoexposure
-BugReports: https://github.com/hailhan/tornadoexposure/issues
+URL: https://github.com/UChicago-ExtremeWeather/tornadoexposure
+BugReports: https://github.com/UChicago-ExtremeWeather/tornadoexposure/issues
 Imports:
   ggplot2,
   sf (>= 1.0-15),
@@ -19,6 +25,8 @@ Imports:
   tigris,
   scico,
   purrr
+Suggests:
+  testthat (>= 3.0.0)
 Depends: 
     R (>= 3.5)
 RoxygenNote: 7.3.3

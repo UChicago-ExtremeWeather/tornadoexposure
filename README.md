@@ -5,7 +5,7 @@ Welcome! This package was created to allow users to interactively explore tornad
 
 ## Set-up
 This package can be installed using the following command:
-```remotes::install_github("hailhan/tornadoexposure")```
+```remotes::install_github("UChicago-ExtremeWeather/tornadoexposure")```
 
 If prompted to update the package upon installation (even if it is your first time installing), you can select option 1 to install the package and all package dependencies. If the package has been updated since initial installation, you may want to re-run the above code to ensure that you have the most up-to-date version of the package installed.
 
