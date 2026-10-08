@@ -114,3 +114,56 @@ add_tracks(geography = "zcta", geo_list, year_range, plot,
 4. Tests.
 5. README, figures, `inst/CITATION`, `NEWS.md`, `R/data.R`.
 6. Final `devtools::check()` clean (no errors or warnings; explain any notes), then summarize for Kate. Deleting `checklist.md` and cutting the release happen only on her say-so.
+
+## Addendum 2 (consolidated)
+
+Where this conflicts with earlier text, this wins.
+
+### 1. Answers to step 2 questions
+- Keep the 302 sliver rows. Document that any-overlap (the default) includes very small touches.
+- Cap area_prop_affected at 1 (2 rows) and document that ALAND excludes water.
+- Accept the _1/_2 suffix for 2001_56, POINT geometry for point tracks, and the tornado_area_m2 column (document it as an upper bound).
+- Keep EPSG:5070 for all areas and note the Puerto Rico distortion caveat in the docs.
+- Leave pdftools installed.
+
+### 2. Width
+wid is the MAXIMUM path width in yards (NWSI 10-1605: header width is the maximum over the whole path or each segment; pre-1995 values were averages; SPC's "average track width" wording appears to describe the older database). Check the NOAA PDF scan's width entry and report its exact wording. Document tornado_area_m2, area_prop_affected, and every population or distance measure derived from the path as UPPER-BOUND estimates (constant-width rectangle at maximum width). Property loss shares are barely affected because width is constant along a tornado.
+
+### 3. Step 2 is not committed yet
+Before committing, run and report these checks:
+(a) Clean rerun from a clean state with nothing else running (the earlier runs collided on the tigris cache); confirm row counts and quantiles match the current output.
+(b) For line tracks, compare geometric start-to-end length with len, and tornado_area_m2 with len*wid; report ratio distributions and the 20 worst. Report the share of each tornado's area inside any ZCTA.
+(c) Sample the 102 no-ZCTA tornadoes (state, coordinates, a few maps). Census says uninhabited areas over two square miles may be left out of ZCTA coverage, which may explain some; verify.
+(d) Joplin May 2011 rows (prefix 648) against the NWS survey length and width.
+(e) 2007+ multi-state injury and fatality totals against segments (use the base om).
+(f) For the 1,588 point tracks, report len and whether the disc underestimates area.
+Then commit step 2 and push (if the push fails on credentials, tell Kate to click Push origin in GitHub Desktop). Do NOT add crossing_ratio, touchdown or liftoff flags, or distance-to-geometric-centroid columns.
+
+### 4. Exposure definitions (final design)
+Principle: every row a call returns is an exposed ZCTA under the single definition the user passed. No call returns a universe of ZCTAs for the user to filter. Each call uses exactly ONE definition, and the threshold arguments are mutually exclusive (a clear error if combined):
+- Overlap (default, all threshold arguments NULL): the path intersects the ZCTA.
+- area_thresh: proportion in (0, 1]; 0 is an error. Keeps rows with area_prop_affected >= area_thresh.
+- pop_thresh: proportion in (0, 1]; 0 is an error. Keeps rows with pop_prop_affected >= pop_thresh.
+- Distance (working argument name pop_centroid_dist_km; Kate does not care about the name yet): a positive number of km. Keeps ZCTAs whose population-weighted centroid is within that distance of the path polygon. This definition returns ZCTAs the path did NOT touch. Widening the radius only adds ZCTAs, but the set is not a superset of the overlap set, which is intended for resident health outcomes. Document that.
+Columns per row: area_prop_affected, pop_affected, zcta_pop, pop_prop_affected, area_share_of_tornado, the centroid distance column (0 or NA as appropriate for overlap rows; define clearly), and a centroid_type column. Context columns: magnitude, total_injury, total_fatality (tornado-level totals), property_loss_tornado_total, property_loss_allocated (area-based, units caveat). For distance-definition rows where the path did not overlap, area_prop_affected and pop_affected are 0.
+
+### 5. Step 2B: population exposure (PLAN ONLY first; no large downloads, no data written, no commit until Kate approves the plan)
+Add pop_affected (estimated residents inside the path within the ZCTA), zcta_pop (the ZCTA's total population in its vintage), and pop_prop_affected = pop_affected / zcta_pop (0 to 1; can be 0 when the path touched a ZCTA but no residents).
+Proposed method (verify, and propose better alternatives if you find them):
+1. Decennial block-level total population matched to the ZCTA vintage (2000 blocks for years before 2010, 2010 for 2010 to 2019, 2020 for 2020 onward).
+2. Intersect each path polygon (EPSG:5070) with blocks of that vintage and allocate each block's population by the share of block area inside the path.
+3. Assign to ZCTAs through the Census ZCTA to tabulation-block relationship. Census says ZCTAs are built from whole blocks (each 2020 block in one ZCTA; 2010 method identical); verify for 2000 and 2010 too. zcta_pop is the sum of block populations in each ZCTA.
+4. Sanity checks: pop_affected <= zcta_pop, pop_prop in [0, 1], compare with area_prop_affected, Joplin 2011, and a rural tornado (expect near 0).
+The plan report must cover: data source options (for example the Census API via tidycensus, NHGIS, Census relationship files) and whether Kate must obtain an API key or account (ask her; do not create accounts); download sizes; a runtime estimate from a small test (one state, then Joplin); caching; handling of zero-population blocks, tornadoes with no ZCTA, and Puerto Rico; the 2020 disclosure-avoidance noise (Census says block counts are noised and recommends aggregating; quantify sensitivity for tornadoes from 2020 on); population fixed at the census year across each decade; and Census citation text. Packages used only in data-raw (for example tidycensus) are not package Imports.
+
+### 6. Step 2C: population-centroid distance (PLAN ONLY, after 2b is approved; no data written, no commit until Kate approves)
+Definition: distance from the tornado path polygon (the width buffer) to the population-weighted centroid of each ZCTA, in km, computed in EPSG:5070. Population-weighted centroid = block internal points weighted by block population, per vintage (verify the available block point fields). The ZCTA vintage must follow the tornado's year (2000 file before 2010, 2010 for 2010 to 2019, 2020 from then); a ZCTA code can cover a different area across vintages, so document this.
+ZCTAs with no residents: use the geometric centroid, set centroid_type = "geometric" (otherwise "population"), and emit a warning whenever a result contains geometric-centroid ZCTAs. Also report how many ZCTAs per vintage fall in this group.
+Design questions for the plan: precompute rows within a cap versus compute on demand (boundaries are downloaded at runtime for maps already); estimate table size and row counts for caps of 10, 25, 50, and 100 km and report them (Kate will choose the cap); a clear error if the requested distance exceeds the cap; distances should be validated against geodesic distances on a sample; handle point tracks, noncontiguous ZCTAs, and tornadoes with no ZCTA nearby.
+Document: distance measures proximity to the damage path only, not damage to any facility. A population-weighted centroid is a single point, so ZCTAs with several separate population clusters can be misrepresented. A possible later upgrade is the share of residents within X km of the path.
+
+### 7. Documentation (R/data.R and README)
+Explain the four definitions and when each fits: overlap and distance for broad or system-wide exposure, pop_thresh for direct harm to residents, area_thresh as the simplest measure. Say that a higher threshold means fewer ZCTAs qualify as exposed. Explain that area share depends on the ZCTA's size as well as the path (the same share can come from a corner clip of a small ZCTA or a straight cut across a large one). Show the table of row counts by threshold, with examples at 0.01 and 0.05 (revisit once population results exist). Show how a user builds exposed versus unexposed ZCTA-years from get_data() output (unexposed = requested ZCTAs not returned), and state that EF0 tornadoes are absent, so "unexposed" can include EF0-only ZCTAs. State the limitations: upper-bound paths, uniform density within blocks, fixed census-year population, 2020 block noise.
+
+### 8. Order of work
+Step 2 checks and commit, then the 2b plan, 2b implementation after Kate approves, the 2c plan, 2c implementation after Kate approves, then steps 3 to 6. Stop and report after each.
