@@ -22,6 +22,7 @@ options(tigris_use_cache = TRUE)
 area_crs <- 5070
 # SPC reports width in yards; NOAA documents a 30 foot (10 yard) minimum width
 yd_to_m <- 0.9144
+mi_to_m <- 1609.344
 min_width_yd <- 10
 
 # ---- 1. read and filter raw SPC records ------------------------------------
@@ -63,12 +64,19 @@ message("Dropped, no valid start location: ", sum(no_start))
 tornadoes <- tornadoes[!no_start, ]
 
 # missing or zero end coordinates (unknown end), or end == start, are treated
-# as a point and buffered by half the width around the start
+# as a point at the start. Direction is unknown, so the path polygon is a disc:
+#   point_equal_area: len > 0, disc centered on the start with area len * wid
+#   point_half_width: len == 0, disc with radius of half the width
+# Both are approximations (the disc area is an upper bound, like all paths).
 bad_end <- is.na(tornadoes$elon) | is.na(tornadoes$elat) |
   tornadoes$elon == 0 | tornadoes$elat == 0
 same_pt <- !bad_end & tornadoes$slon == tornadoes$elon &
   tornadoes$slat == tornadoes$elat
-tornadoes$track_type <- ifelse(bad_end | same_pt, "point", "line")
+tornadoes$track_type <- ifelse(
+  !(bad_end | same_pt), "line",
+  ifelse(!is.na(tornadoes$len) & tornadoes$len > 0,
+         "point_equal_area", "point_half_width")
+)
 message("Track type: ", paste(names(table(tornadoes$track_type)),
                               table(tornadoes$track_type), collapse = ", "),
         " (end missing/zero: ", sum(bad_end), ", start == end: ",
@@ -97,13 +105,24 @@ geom <- st_sfc(lapply(seq_len(nrow(tornadoes)), make_geom), crs = 4326)
 geom_area <- st_transform(geom, area_crs)
 half_width_m <- tornadoes$wid * yd_to_m / 2
 
-# flat end caps for lines (round caps would add area); points get a circle
 is_line <- tornadoes$track_type == "line"
+is_eq <- tornadoes$track_type == "point_equal_area"
+is_hw <- tornadoes$track_type == "point_half_width"
+
+# radius of the equal-area disc: pi * r^2 = len (m) * wid (m)
+radius_m <- half_width_m
+radius_m[is_eq] <- sqrt(tornadoes$len[is_eq] * mi_to_m * tornadoes$wid[is_eq] *
+                          yd_to_m / pi)
+message("Equal-area discs smaller than the half-width disc: ",
+        sum(is_eq & radius_m < half_width_m))
+
+# flat end caps for lines (round caps would add area); points get a disc
+# (90 segments per quarter circle so the polygon area is within 0.01% of a circle)
 poly_list <- vector("list", length(geom_area))
 poly_list[is_line] <- as.list(st_buffer(
   geom_area[is_line], dist = half_width_m[is_line], endCapStyle = "FLAT"))
 poly_list[!is_line] <- as.list(st_buffer(
-  geom_area[!is_line], dist = half_width_m[!is_line]))
+  geom_area[!is_line], dist = radius_m[!is_line], nQuadSegs = 90))
 poly <- st_sfc(poly_list, crs = area_crs)
 poly <- st_make_valid(poly)
 
@@ -167,14 +186,15 @@ tornado_exposure <- pieces %>%
     tornadoes %>%
       transmute(tornado_id, date, year = yr, month = mo, day = dy,
                 magnitude = mag, total_injury = inj, total_fatality = fat,
-                property_loss_tornado_total = loss),
+                property_loss_tornado_total = loss, track_type),
     by = "tornado_id"
   ) %>%
   mutate(property_loss_allocated =
            property_loss_tornado_total * area_share_of_tornado) %>%
   select(tornado_id, date, year, month, day, magnitude, total_injury,
          total_fatality, property_loss_tornado_total, property_loss_allocated,
-         ZCTA, area_prop_affected, area_prop_uncapped, area_share_of_tornado) %>%
+         ZCTA, area_prop_affected, area_prop_uncapped, area_share_of_tornado,
+         track_type) %>%
   arrange(tornado_id, ZCTA) %>%
   as.data.frame()
 
@@ -193,10 +213,20 @@ stopifnot(all(abs(chk$alloc - chk$total) <= 1e-8 * pmax(1, abs(chk$total))))
 
 # ---- 7. track geometries for plotting --------------------------------------
 
+# straight start-to-end distance (geodesic) over reported length; NA for points.
+# A ratio above 1 is physically impossible; coordinates are trusted as given.
+straight_mi <- rep(NA_real_, nrow(tornadoes))
+straight_mi[is_line] <- as.numeric(st_length(geom[is_line])) / mi_to_m
+len_ratio <- ifelse(is_line & tornadoes$len > 0, straight_mi / tornadoes$len,
+                    NA_real_)
+
 tornado_tracks <- st_sf(
   tornado_id = tornadoes$tornado_id,
   track_type = tornadoes$track_type,
   width_imputed = tornadoes$width_imputed,
+  len_mi = tornadoes$len,
+  wid_yd = tornadoes$wid,
+  len_ratio = len_ratio,
   tornado_area_m2 = tornado_polys$tornado_area_m2,
   geometry = geom
 )
