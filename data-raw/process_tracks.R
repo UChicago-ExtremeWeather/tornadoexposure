@@ -11,6 +11,9 @@ library(dplyr)
 library(sf)
 library(tigris)
 
+# the path polygon builder is shared with the package (R/path_polygon.R)
+source("R/path_polygon.R")
+
 latest_year <- 2025
 noaa_url <- sprintf(
   "https://www.spc.noaa.gov/wcm/data/1950-%s_all_tornadoes.csv", latest_year
@@ -19,10 +22,10 @@ access_date <- Sys.Date()
 options(tigris_use_cache = TRUE)
 
 # equal-area CRS used for every area calculation (NAD83 / Conus Albers)
-area_crs <- 5070
+area_crs <- .area_crs
 # SPC reports width in yards; NOAA documents a 30 foot (10 yard) minimum width
-yd_to_m <- 0.9144
-mi_to_m <- 1609.344
+yd_to_m <- .yd_to_m
+mi_to_m <- .mi_to_m
 min_width_yd <- 10
 
 # ---- 1. read and filter raw SPC records ------------------------------------
@@ -102,29 +105,17 @@ geom <- st_sfc(lapply(seq_len(nrow(tornadoes)), make_geom), crs = 4326)
 
 # ---- 4. buffer by half the width in the equal-area CRS ---------------------
 
-geom_area <- st_transform(geom, area_crs)
-half_width_m <- tornadoes$wid * yd_to_m / 2
-
 is_line <- tornadoes$track_type == "line"
 is_eq <- tornadoes$track_type == "point_equal_area"
-is_hw <- tornadoes$track_type == "point_half_width"
-
-# radius of the equal-area disc: pi * r^2 = len (m) * wid (m)
-radius_m <- half_width_m
-radius_m[is_eq] <- sqrt(tornadoes$len[is_eq] * mi_to_m * tornadoes$wid[is_eq] *
-                          yd_to_m / pi)
+half_width_m <- tornadoes$wid * yd_to_m / 2
+radius_eq_m <- sqrt(tornadoes$len * mi_to_m * tornadoes$wid * yd_to_m / pi)
 message("Equal-area discs smaller than the half-width disc: ",
-        sum(is_eq & radius_m < half_width_m))
+        sum(is_eq & radius_eq_m < half_width_m))
 
-# flat end caps for lines (round caps would add area); points get a disc
-# (90 segments per quarter circle so the polygon area is within 0.01% of a circle)
-poly_list <- vector("list", length(geom_area))
-poly_list[is_line] <- as.list(st_buffer(
-  geom_area[is_line], dist = half_width_m[is_line], endCapStyle = "FLAT"))
-poly_list[!is_line] <- as.list(st_buffer(
-  geom_area[!is_line], dist = radius_m[!is_line], nQuadSegs = 90))
-poly <- st_sfc(poly_list, crs = area_crs)
-poly <- st_make_valid(poly)
+# the shared builder (also used by add_tracks() in the package): flat-capped
+# buffer for lines, equal-area disc or half-width disc for points, in EPSG:5070
+poly <- .path_polygon(geom, tornadoes$wid, tornadoes$len, tornadoes$track_type,
+                      crs = area_crs)
 
 tornado_polys <- st_sf(
   tornado_id = tornadoes$tornado_id,

@@ -3,5 +3,4 @@
 export(add_tracks)
 export(get_data)
 export(map_exposure)
-import(sf)
-importFrom(dplyr,"%>%")
+importFrom(ggplot2,.data)
