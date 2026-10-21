@@ -1,5 +1,4 @@
-# To cite the package, use the first entry. The DOI is a placeholder until the
-# GitHub release and the Zenodo record exist. The second and third entries credit
+# To cite the package, use the first entry. The remaining entries credit
 # the data sources (access dates are updated with each data refresh). The Census entries follow the format of
 # https://www.census.gov/about/policies/citation.html.
 authors <- c(
@@ -16,12 +15,12 @@ bibentry(
   year = format(Sys.Date(), "%Y"),
   note = paste0("R package version ", meta$Version, " (code and bundled data)"),
   url = "https://github.com/UChicago-ExtremeWeather/tornadoexposure",
-  doi = "DOI_PLACEHOLDER_TO_BE_ADDED_AFTER_THE_GITHUB_RELEASE_AND_ZENODO_RECORD",
+  doi = "10.5281/zenodo.23544842",
   textVersion = paste0(
     "Hansen H, Nguyen J, Sanghavi P, Burrows K (", format(Sys.Date(), "%Y"),
     "). tornadoexposure: ", meta$Title, ". R package version ", meta$Version,
     " (code and bundled data). https://github.com/UChicago-ExtremeWeather/tornadoexposure.",
-    " DOI: [placeholder, to be added after the GitHub release and Zenodo record exist]."
+    " DOI: 10.5281/zenodo.23544842."
   )
 )
 
