@@ -193,7 +193,7 @@ Data sources (accessed 2026-10-12):
 * Survey layer: NOAA National Weather Service [Damage Assessment Toolkit](https://apps.dat.noaa.gov/StormDamage/DamageViewer/) (accessed 2026-10-15).
 
 To cite the package, use the DOI of the archived release:
-**[DOI placeholder: added after the GitHub release and Zenodo record exist]**.
+**To cite the package, use https://doi.org/10.5281/zenodo.23544842.**.
 See `citation("tornadoexposure")`.
 
 ## Acknowledgements
