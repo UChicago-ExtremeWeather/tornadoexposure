@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use this package, please cite it as below."
+title: "tornadoexposure: Explore and Map ZCTA-Level Tornado Exposures in the United States"
+type: software
+authors:
+  - family-names: Hansen
+    given-names: Hailey
+  - family-names: Nguyen
+    given-names: Jessy
+  - family-names: Sanghavi
+    given-names: Prachi
+  - family-names: Burrows
+    given-names: Kate
+doi: 10.5281/zenodo.23544841
+repository-code: "https://github.com/UChicago-ExtremeWeather/tornadoexposure"
+license: GPL-2.0-or-later
