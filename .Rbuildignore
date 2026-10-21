@@ -1,0 +1,10 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^data-raw$
+^figures$
+^README.md$
+^LICENSE\.md$
+^scratch$
+^README\.(pdf|html)$
+^LICENSE$
+^\.zenodo\.json$

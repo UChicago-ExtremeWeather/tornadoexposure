@@ -1,0 +1,16 @@
+# Run from the package root: Rscript data-raw/qa/09_state_mismatch.R
+source("data-raw/qa/helpers.R")
+suppressMessages({library(dplyr); library(sf)}); options(tigris_use_cache=TRUE); sf_use_s2(FALSE)
+load("data/tornado_tracks.rda")
+raw <- read.csv(qa_spc_csv()) %>% filter(yr>=1996, sg==1) %>% mutate(tornado_id=paste(yr,om,sep="_")) %>% filter(!duplicated(tornado_id) & !duplicated(tornado_id, fromLast=TRUE)) %>% select(tornado_id, st, mag, slat, slon, len)
+stt <- tigris::states(cb=TRUE, year=2020, progress_bar=FALSE) %>% select(STUSPS) %>% st_transform(4326)
+pts <- st_as_sf(raw, coords=c("slon","slat"), crs=4326, remove=FALSE)
+j <- st_join(pts, stt, join=st_intersects)
+j <- j %>% st_drop_geometry() %>% group_by(tornado_id) %>% summarise(st=first(st), mag=first(mag), len=first(len), slat=first(slat), slon=first(slon), STUSPS=paste(unique(STUSPS[!is.na(STUSPS)]), collapse="/"), .groups="drop")
+cat("tornadoes:", nrow(j), "; start outside every state polygon (cb shoreline; coastal/water):", sum(j$STUSPS==""), "; inside a state different from reported:", sum(j$STUSPS!="" & !mapply(function(a,b) a %in% strsplit(b,"/")[[1]], j$st, j$STUSPS)), "\n")
+mm <- j %>% filter(STUSPS!="" & !mapply(function(a,b) a %in% strsplit(b,"/")[[1]], st, STUSPS))
+print(mm %>% arrange(desc(mag)) %>% head(15), row.names=FALSE)
+cat("by era of mismatch: "); print(table(ifelse(as.integer(substr(mm$tornado_id,1,4))<=2006,"1996-2006","2007+")))
+
+# numbers quoted in data-raw/known_issues.md (read by check_documented_claims.R)
+saveRDS(list(n_tornadoes = nrow(j), n_mismatch = nrow(mm), n_mismatch_early = sum(as.integer(substr(mm$tornado_id, 1, 4)) <= 2006), n_outside = sum(j$STUSPS == "")), qa_out("documented_09.rds"))

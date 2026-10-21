@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+scratch/
+.DS_Store
+data-raw/qa/out/
+data-raw/qa/cache/
+README.pdf
+README.html

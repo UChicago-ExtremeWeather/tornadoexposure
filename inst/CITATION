@@ -1,0 +1,111 @@
+# To cite the package, use the first entry. The DOI is a placeholder until the
+# GitHub release and the Zenodo record exist. The second and third entries credit
+# the data sources (access dates are updated with each data refresh). The Census entries follow the format of
+# https://www.census.gov/about/policies/citation.html.
+authors <- c(
+  person("Hailey", "Hansen"),
+  person("Jessy", "Nguyen"),
+  person("Prachi", "Sanghavi"),
+  person("Kate", "Burrows")
+)
+
+bibentry(
+  "Manual",
+  title = paste0("tornadoexposure: ", meta$Title),
+  author = authors,
+  year = format(Sys.Date(), "%Y"),
+  note = paste0("R package version ", meta$Version, " (code and bundled data)"),
+  url = "https://github.com/UChicago-ExtremeWeather/tornadoexposure",
+  doi = "DOI_PLACEHOLDER_TO_BE_ADDED_AFTER_THE_GITHUB_RELEASE_AND_ZENODO_RECORD",
+  textVersion = paste0(
+    "Hansen H, Nguyen J, Sanghavi P, Burrows K (", format(Sys.Date(), "%Y"),
+    "). tornadoexposure: ", meta$Title, ". R package version ", meta$Version,
+    " (code and bundled data). https://github.com/UChicago-ExtremeWeather/tornadoexposure.",
+    " DOI: [placeholder, to be added after the GitHub release and Zenodo record exist]."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "Severe Weather Database (tornado records)",
+  author = person("NOAA Storm Prediction Center"),
+  url = "https://www.spc.noaa.gov/wcm/",
+  note = "Data source of the tornado tracks. Accessed 2026-10-12.",
+  textVersion = paste0(
+    "NOAA Storm Prediction Center. Severe Weather Database (tornado records). ",
+    "https://www.spc.noaa.gov/wcm/ (accessed 2026-10-12)."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "Damage Assessment Toolkit",
+  author = person("NOAA National Weather Service"),
+  url = "https://services.dat.noaa.gov/arcgis/rest/services/nws_damageassessmenttoolkit/DamageViewer/FeatureServer",
+  note = "Data source of the survey layer (labeled preliminary by NOAA). Accessed 2026-10-12.",
+  textVersion = paste0(
+    "NOAA National Weather Service. Damage Assessment Toolkit. ",
+    "https://services.dat.noaa.gov/arcgis/rest/services/nws_damageassessmenttoolkit/DamageViewer/FeatureServer ",
+    "(accessed 2026-10-12; preliminary data)."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "TIGER/Line ZCTA boundary files, 2000",
+  author = person("U.S. Census Bureau"),
+  url = "https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2000/",
+  note = "ZCTA boundaries of the 2000 Census boundary year. Accessed 2026-10-12.",
+  textVersion = paste0(
+    "U.S. Census Bureau. TIGER/Line Shapefiles, ZCTA boundaries, 2000 (file tl_2010_us_zcta500). ",
+    "https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2000/ (accessed 2026-10-12)."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "TIGER/Line ZCTA boundary files, 2010",
+  author = person("U.S. Census Bureau"),
+  url = "https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/",
+  note = "ZCTA boundaries of the 2010 Census boundary year. Accessed 2026-10-12.",
+  textVersion = paste0(
+    "U.S. Census Bureau. TIGER/Line Shapefiles, ZCTA boundaries, 2010 (file tl_2010_us_zcta510). ",
+    "https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/ (accessed 2026-10-12)."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "TIGER/Line ZCTA boundary files, 2020",
+  author = person("U.S. Census Bureau"),
+  url = "https://www2.census.gov/geo/tiger/TIGER2020/ZCTA520/",
+  note = "ZCTA boundaries of the 2020 Census boundary year. Accessed 2026-10-12.",
+  textVersion = paste0(
+    "U.S. Census Bureau. TIGER/Line Shapefiles, ZCTA boundaries, 2020 (file tl_2020_us_zcta520). ",
+    "https://www2.census.gov/geo/tiger/TIGER2020/ZCTA520/ (accessed 2026-10-12)."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "TIGER/Line tabulation block files, 2000, 2010 and 2020",
+  author = person("U.S. Census Bureau"),
+  url = "https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/",
+  note = "Census block boundaries (2020; the 2010 and 2000 files are in TIGER2010/TABBLOCK/2010/ and TIGER2010/TABBLOCK/2000/); the 2020 files also hold the 2020 block population (field POP20). Accessed 2026-10-12.",
+  textVersion = paste0(
+    "U.S. Census Bureau. TIGER/Line Shapefiles, tabulation blocks, 2000, 2010 and 2020; 2020 block population from field POP20. ",
+    "https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/ (accessed 2026-10-12)."
+  )
+)
+
+bibentry(
+  "Misc",
+  title = "Decennial census redistricting data (PL 94-171), 2000 and 2010",
+  author = person("U.S. Census Bureau"),
+  url = "https://www2.census.gov/census_2010/01-Redistricting_File--PL_94-171/",
+  note = "Block population counts for 2000 and 2010 (the 2000 files are at https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/). Accessed 2026-10-12.",
+  textVersion = paste0(
+    "U.S. Census Bureau. Decennial Census Redistricting Data (Public Law 94-171) Summary Files, 2000 and 2010. ",
+    "https://www2.census.gov/census_2010/01-Redistricting_File--PL_94-171/ (accessed 2026-10-12)."
+  )
+)

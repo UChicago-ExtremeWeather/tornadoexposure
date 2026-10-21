@@ -1,0 +1,216 @@
+```{r setup, include = FALSE}
+suppressMessages(devtools::load_all(quiet = TRUE))
+knitr::opts_chunk$set(comment = "#>", collapse = TRUE, message = TRUE,
+                      fig.show = "hide", fig.path = "figures/",
+                      fig.width = 5.5, fig.height = 4.5, dpi = 110)
+options(width = 80, digits = 7)
+# every number in a printed example is shown with 3 decimals, padded to its original width so columns stay aligned
+knitr::knit_hooks$set(output = function(x, options) {
+  num <- "(?<![0-9A-Za-z_.])-?[0-9]+\\.[0-9]+(?![0-9A-Za-z_.])"
+  m <- gregexpr(num, x, perl = TRUE)
+  regmatches(x, m) <- lapply(regmatches(x, m), function(t) vapply(t, function(k) formatC(as.numeric(k), format = "f", digits = 3, width = nchar(k)), "", USE.NAMES = FALSE))
+  paste0("```\n", x, "```\n")
+})
+f0 <- function(x) formatC(x, format = "d", big.mark = ",")
+yrs <- range(tornado_exposure$year)
+nums <- read.csv("data-raw/readme/numbers.csv"); N <- function(x) nums$value[nums$name == x]   # numbers from the QA scripts (data-raw/qa/50_readme_numbers.R)
+p1 <- function(x) sprintf("%.1f", x)
+tt <- sf::st_drop_geometry(tornado_tracks); sm <- survey_matches
+```
+# tornadoexposure
+
+`tornadoexposure` provides ZCTA-level tornado exposure data for the United States, `r yrs[1]` to
+`r yrs[2]`, ready to use without assembling it from raw sources. A ZCTA (ZIP Code Tabulation Area) is the
+Census Bureau's approximation of a ZIP code area. The tornado tracks come from the NOAA Storm Prediction Center
+(SPC) and are combined with Census Bureau ZCTA boundaries and block populations. In each call you choose how a
+ZCTA counts as exposed: the path overlaps it, covers a given share of its land area or residents, or its
+centroid is within a given distance. The data are bundled, so only maps need an internet connection.
+
+## Set-up
+
+```r
+remotes::install_github("UChicago-ExtremeWeather/tornadoexposure")
+library(tornadoexposure)
+```
+
+## Data
+
+| Dataset | Contents | Rows |
+|---|---|---|
+| `tornado_exposure` | one row per tornado and ZCTA the path overlaps | `r f0(nrow(tornado_exposure))` |
+| `tornado_tracks` | one row per tornado, with track geometry | `r f0(nrow(tornado_tracks))` |
+| `zcta_centroids` | population-weighted ZCTA centroids, per Census boundary year | `r f0(nrow(zcta_centroids))` |
+| `survey_exposure` | the same as `tornado_exposure`, from the surveyed damage area; only tornadoes with a usable survey swath | `r f0(nrow(survey_exposure))` |
+| `survey_tracks` | surveyed damage swath of each tornado in `survey_exposure` | `r f0(nrow(survey_tracks))` |
+| `survey_matches` | one row per SPC tornado since 2007: its closest survey line and whether the swath is usable | `r f0(nrow(survey_matches))` |
+
+The main variables of `tornado_exposure` (all are described in `?tornado_exposure`):
+
+| Variable | Description |
+|---|---|
+| `tornado_id`, `date`, `year` | SPC year and SPC's record number for the tornado, joined (e.g. `2011_1105221634-01`); date |
+| `magnitude` | EF rating 0 to 5 (the original Fujita scale before 2007), `NA` if unknown |
+| `total_injury`, `total_fatality` | whole-tornado totals, repeated on each ZCTA row |
+| `property_loss_tornado_total` / `property_loss_allocated` | SPC loss in dollars, whole tornado / the part assigned to the ZCTA by `area_share_of_tornado`; `NA` if SPC recorded 0: `r f0(sum(is.na(tt$property_loss_tornado_total)))` of `r f0(nrow(tt))` tornadoes (`r p1(100 * mean(is.na(tt$property_loss_tornado_total)))`%) |
+| `ZCTA` | five-character ZCTA code |
+| `area_prop_affected` | share of the ZCTA's land area inside the path |
+| `area_share_of_tornado` | share of the tornado's path area that lies in this ZCTA |
+| `pop_affected`, `zcta_pop`, `pop_prop_affected` | residents in the path (fractional, because blocks are split by area); in the ZCTA; ratio |
+
+## Functions
+
+All functions take named arguments; every row returned is an exposed ZCTA. The examples use the Joplin, Missouri
+tornado (EF5, 22 May 2011) and the Moore, Oklahoma tornado (20 May 2013).
+
+### `get_data()`
+
+Returns a data frame with one row per exposed tornado-ZCTA pair.
+
+* `geo_list`: ZCTAs or prefixes of 1 to 5 digits, as strings (`"648"`).
+* `year_range`: years, for example `2011` or `2010:2015`.
+* `magnitude`: ratings to keep (default all, including unknown). `1:5` keeps EF1 and above and drops unknown ratings; `c(1:5, NA)` keeps unknown ones too; `5` keeps only EF5.
+* `area_thresh`, `pop_thresh`: the share (a proportion from 0 to 1; 0 is not allowed) of the ZCTA's land area or residents the path must cover.
+* `centroid_dist_km`: a positive number of km; the ZCTA's population-weighted centroid (the average location of its residents, from census block locations weighted by population) must be within this distance of the path. These results also have `dist_km`, `centroid_type` and `centroid_in_zcta`; a ZCTA with no residents uses its geometric center, with a warning.
+
+Use at most one of the last three (none means overlap). The path is the straight line between SPC's start and end points, widened to SPC's width, or a disc for a tornado with no usable end point (the exposure columns use this path polygon). Joplin, 2011, under the four definitions (the values 0.05, 0.05 and 10 km are examples, not recommendations):
+
+```{r get-overlap}
+get_data(geo_list = "648", year_range = 2011, magnitude = 5)[
+  c("ZCTA", "area_prop_affected")]
+```
+
+```{r get-area}
+get_data(geo_list = "648", year_range = 2011, magnitude = 5,
+         area_thresh = 0.05)[c("ZCTA", "area_prop_affected")]
+```
+
+```{r get-pop}
+get_data(geo_list = "648", year_range = 2011, magnitude = 5,
+         pop_thresh = 0.05)[c("ZCTA", "pop_prop_affected")]
+```
+
+```{r get-dist}
+get_data(geo_list = "648", year_range = 2011, magnitude = 5,
+         centroid_dist_km = 10)[c("ZCTA", "dist_km")]
+```
+
+```{r extra, include = FALSE}
+overlap_z <- get_data(geo_list = "648", year_range = 2011, magnitude = 5)$ZCTA
+dist_z <- get_data(geo_list = "648", year_range = 2011, magnitude = 5,
+                   centroid_dist_km = 10)$ZCTA
+extra <- setdiff(dist_z, overlap_z)
+```
+
+The last result includes ZCTAs the path did not overlap (`r paste(extra, collapse = " and ")` here), because the
+definition uses the centroid. Several full ZCTAs and years in one call (Moore area, EF4 and EF5 tornadoes of 2010 to 2013):
+
+```{r several}
+get_data(geo_list = c("73160", "73165", "73170"), year_range = 2010:2013, magnitude = 4:5)[
+  c("ZCTA", "date", "magnitude", "area_prop_affected")]
+```
+
+To save a result as a file, wrap the call in `write.csv()`:
+
+```{r save, eval = FALSE}
+write.csv(get_data(geo_list = c("73160", "73165", "73170"), year_range = 2010:2013, magnitude = 4:5),
+          "moore.csv", row.names = FALSE)
+```
+
+### `map_exposure()`
+
+Takes the same arguments as `get_data()` and draws ZCTA boundaries, filled with a summary of the exposures if `feature` is given: `"tornado_id"`
+maps the number of tornadoes, `"magnitude"` the average rating, `"total_fatality"` and `"total_injury"` the sums. The injury and fatality columns hold whole-tornado totals repeated on each ZCTA row, so these sums are not totals of people: do not add the columns across rows yourself.
+
+```{r map-count}
+map_exposure(geo_list = "648", year_range = 2011, feature = "tornado_id")
+```
+
+![](figures/map-count-1.png)
+
+Boundaries are downloaded from the Census Bureau the first time. The first `map_exposure()` call (2011 here) downloads a file of `r round(N("map_zip_mb"))` MB and took about `r round(N("map_first_s"))` seconds in testing; later calls use the cache. Years before 2010 or from 2020 use other boundary files (`r round(N("map_zip_mb_2000"))` and `r round(N("map_zip_mb_2020"))` MB).
+
+### `add_tracks()`
+
+Takes the same arguments as `get_data()` and adds the tornadoes it returns to a map, as tracks (the straight line between SPC's start and end points) or, with `geometry = "polygon"`, as
+the path polygons used for exposure. It also accepts `geometry = "survey"`.
+
+```{r tracks}
+add_tracks(geo_list = "648", year_range = 2011, magnitude = 5,
+           plot = map_exposure(geo_list = "648", year_range = 2011))
+```
+
+```{r polygon}
+add_tracks(geo_list = "648", year_range = 2011, magnitude = 5,
+           geometry = "polygon",
+           plot = map_exposure(geo_list = "648", year_range = 2011))
+```
+
+![](figures/tracks-1.png) ![](figures/polygon-1.png)
+
+### `get_survey_data()`
+
+Same arguments as `get_data()`, using the damage zones mapped by National Weather Service survey teams after the tornado,
+to see whether results change when the surveyed damage area replaces the modeled path. SPC is the main exposure; this is a sensitivity layer for tornadoes that have a survey.
+
+```{r survey}
+get_survey_data(geo_list = "731", year_range = 2013, magnitude = 5)[
+  c("ZCTA", "area_prop_affected", "pop_affected")]
+```
+
+## Limitations
+
+Numbers for each point, and how they were computed: `data-raw/known_issues.md`.
+
+```{r lim, include = FALSE}
+inc <- sm[sm$status == "included", ]
+ratio <- tt$tornado_area_m2[match(inc$tornado_id, tt$tornado_id)] / (inc$swath_km2 * 1e6)
+pr_ <- sm[sm$status != "no_pair", ]
+far <- pr_$distance_km > pmax(tt$len_mi[match(pr_$tornado_id, tt$tornado_id)], 0.1) * 1.609344
+yr <- as.integer(format(tt$date, "%Y")); unk <- is.na(tt$magnitude)
+ef0 <- tapply(!unk & tt$magnitude == 0, yr, sum); un <- tapply(unk, yr, sum); ym <- names(which.max(un / table(yr)))
+```
+
+* Each path is a straight line from SPC's start point to its end point, drawn with SPC's width (`wid`),
+  which this package treats as the maximum width (NWS instructions for Storm Data define the width entered
+  as the maximum; source in `data-raw/known_issues.md`). For the `r f0(nrow(inc))` tornadoes with a surveyed damage swath, the modeled path area has a
+  median of `r sprintf("%.2f", median(ratio))` times the surveyed swath area (10th to 90th percentile
+  `r sprintf("%.2f", quantile(ratio, .1))` to `r sprintf("%.2f", quantile(ratio, .9))`). Real paths also curve: for the `r f0(N("offset_n"))` line tracks with a surveyed swath, the largest distance between the surveyed
+  centerline and the modeled line has a median of `r sprintf("%.2f", N("offset_median_km"))` km and a 90th percentile of `r sprintf("%.2f", N("offset_p90_km"))` km.
+* Coordinates before 2007 are rounded to 0.01 degrees (about 1.1 km of latitude); from 2007 they have
+  0.0001 degrees (about 11 m). In a simulation that moves the coordinates by the rounding amount (`r f0(N("round_n_per_era"))` tornadoes per period), the list of ZCTAs
+  changes for `r p1(N("round_before_2007_pct"))`% of tornadoes before 2007 and `r p1(N("round_from_2007_pct"))`% from 2007 (per replicate).
+* A tornado with no usable end point (start equal to end, or an end that is zero or missing) is drawn as a disc
+  centered on the start point, because its direction is unknown. If SPC gives a length, the disc has area equal to
+  length times width (`track_type = "point_equal_area"`, `r f0(sum(tt$track_type == "point_equal_area"))` tornadoes);
+  if the length is 0, the disc has a radius of half the width (`"point_half_width"`, `r f0(sum(tt$track_type == "point_half_width"))`
+  tornadoes). Together they are `r p1(100 * mean(tt$track_type != "line"))`% of all tornadoes.
+* `pop_affected` counts the total residents (all ages) of the census blocks the path covers, assuming residents are spread evenly over each block. It uses the 2000 census for tornadoes before 2010, the 2010 census for 2010 to 2019 and the 2020 census from 2020. For tornadoes with a usable survey swath, the residents share from the modeled path divided by the share from the surveyed swath (same ZCTA) has a median of `r sprintf("%.2f", N("popratio_median"))` (10th to 90th percentile `r sprintf("%.2f", N("popratio_p10"))` to `r sprintf("%.2f", N("popratio_p90"))`; `r f0(N("popratio_n"))` tornado-ZCTA pairs). The 2020 block counts also contain noise added by the Census Bureau (`data-raw/known_issues.md`).
+* Exposure uses the Census boundary year (2000, 2010 or 2020) that matches the tornado's year: 2000 before 2010, 2010 for 2010 to 2019, 2020 from 2020. The same ZCTA code can cover a different area in different boundary years: `r p1(N("overlap_half_2010_2020_pct"))`% of the `r f0(N("overlap_codes_2010_2020"))` codes in both the 2010 and 2020 files have an overlap ratio below 0.5 (`r p1(N("overlap_half_2000_2010_pct"))`% between 2000 and 2010). The overlap ratio is the area the two shapes share divided by the area they cover together.
+* `r f0(N("noz_n"))` tornadoes (`r p1(N("noz_pct"))`%) overlap no ZCTA and have no rows in `tornado_exposure`: `r f0(N("noz_water"))` are over water, `r f0(N("noz_nonear"))` are over land with no ZCTA nearby, `r f0(N("noz_mostly"))` are on land that is mostly covered. They stay in `tornado_tracks`, and their loss is not assigned to any ZCTA (definitions: `data-raw/known_issues.md`).
+* Unknown ratings (`NA`) appear only from 2007: `r f0(sum(unk))` tornadoes, `r f0(sum(unk & yr < 2007))` before 2007. EF0 counts across years are comparable only if unknown ratings are included: in `r ym`, `r f0(ef0[[ym]])` tornadoes are EF0 and `r f0(un[[ym]])` are unknown.
+* SPC loss is `NA` where SPC recorded 0 (which NOAA says does not mean $0): `r f0(sum(is.na(tt$property_loss_tornado_total)))` of
+  `r f0(nrow(tt))` tornadoes. SPC reports loss in millions of dollars before 2007 and in dollars from 2007; the package converts everything to dollars. The values are nominal (not adjusted for inflation).
+* `tornado_id` is unique within a package version but is not stable across SPC releases from 2007 on.
+* `get_survey_data()` covers only the `r f0(nrow(inc))` SPC tornadoes since 2007 that were paired with a survey line (their
+  closest one) and have a usable damage swath (definitions in `?survey_matches`). The pairing has no cut-off, so a tornado with
+  no real survey counterpart can be paired with a distant line: `r f0(sum(far))` of the `r f0(nrow(pr_))` pairs (`r p1(100 * mean(far))`%) have a
+  survey line farther away than the larger of the tornado's reported length and 0.1 mile, `r f0(sum(far & pr_$status == "included"))` of them with a usable swath. NOAA labels the survey data preliminary (accessed `r readLines("data-raw/survey/access_date.txt")`). The notices and their exact wording are in `data-raw/known_issues.md`.
+
+## Citation
+
+Data sources (accessed `r readLines("data-raw/access_date.txt")`):
+
+* NOAA Storm Prediction Center, [Severe Weather Database](https://www.spc.noaa.gov/wcm/).
+* U.S. Census Bureau, TIGER/Line ZCTA boundary files for [2000](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/) and [2020](https://www2.census.gov/geo/tiger/TIGER2020/ZCTA520/).
+* U.S. Census Bureau, TIGER/Line tabulation block files ([2000](https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2010/), [2020](https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/)); the 2020 files also hold the 2020 block population.
+* U.S. Census Bureau, decennial population counts for 2000 and 2010 ([PL 94-171 redistricting files, 2000](https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/) and [2010](https://www2.census.gov/census_2010/01-Redistricting_File--PL_94-171/)).
+* Survey layer: NOAA National Weather Service [Damage Assessment Toolkit](https://apps.dat.noaa.gov/StormDamage/DamageViewer/) (accessed `r readLines("data-raw/survey/access_date.txt")`).
+
+To cite the package, use the DOI of the archived release:
+**[DOI placeholder: added after the GitHub release and Zenodo record exist]**.
+See `citation("tornadoexposure")`.
+
+## Acknowledgements
+
+This work was supported by the Institute for Climate and Sustainable Growth (ISCG) and the Center
+for Climate, Health and Society (CHAS).

@@ -1,0 +1,27 @@
+# Run from the package root: Rscript data-raw/qa/00a_segment_records.R
+source("data-raw/qa/helpers.R")
+suppressMessages(library(dplyr))
+t <- read.csv(qa_spc_csv()) %>% filter(yr>=1996) %>% mutate(id=paste(yr,om,sep="_"))
+s1 <- t %>% filter(sg==1)
+cat("sg==1 rows:", nrow(s1), " unique ids:", n_distinct(s1$id), "\n")
+d <- s1 %>% count(id) %>% filter(n>1); cat("ids with >1 sg==1 row:", nrow(d), "\n")
+if (nrow(d)) print(t %>% filter(id %in% d$id) %>% select(id,st,ns,sn,sg,mag,inj,fat,loss,slat,slon,elat,elon,len,date))
+seg_only <- setdiff(unique(t$id), s1$id)
+cat("ids with NO sg==1 row (segments only):", length(seg_only), "\n")
+if (length(seg_only)) print(t %>% filter(id %in% seg_only) %>% select(id,st,ns,sn,sg,mag,inj,fat,loss,date) %>% head(20))
+# whole-track check for multi-state tornadoes
+ms <- t %>% filter(ns>1)
+seg <- ms %>% filter(sg==2, sn==1) %>% group_by(id) %>% summarise(inj_seg=sum(inj), fat_seg=sum(fat), loss_seg=sum(loss), len_seg=sum(len), n_seg=n())
+w <- s1 %>% filter(ns>1) %>% inner_join(seg, by="id")
+cat("multi-state sg==1 with segments:", nrow(w), "\n")
+cat(" inj equals sum of segments:", sum(w$inj==w$inj_seg), "/", nrow(w), "\n")
+cat(" fat equals sum of segments:", sum(w$fat==w$fat_seg), "/", nrow(w), "\n")
+cat(" loss equals sum of segments (1e-6):", sum(abs(w$loss-w$loss_seg)<1e-6), "/", nrow(w), "\n")
+cat(" len >= max seg len -0.05:", sum(w$len >= w$len_seg - 0.05), "/", nrow(w), "\n")
+print(w %>% filter(inj!=inj_seg | fat!=fat_seg | abs(loss-loss_seg)>=1e-6) %>% select(id,inj,inj_seg,fat,fat_seg,loss,loss_seg) %>% head(10))
+# sg==1 but mag differs from segments / mag>=1 only in segments
+cat("ids where sg==1 mag<1 but some segment mag>=1:", 
+    nrow(t %>% filter(sg!=1) %>% inner_join(s1 %>% filter(mag<1) %>% select(id), by="id") %>% filter(mag>=1) %>% distinct(id)), "\n")
+cat("sg==-9 rows:", sum(t$sg==-9), " (continuing county fips)\n")
+cat("lat/lon bounds of sg==1 mag>=1 starts: "); z<-s1%>%filter(mag>=1,slon!=0); print(range(z$slon)); print(range(z$slat))
+cat("states outside CONUS (AK,HI,PR,VI):"); print(table(s1$st[s1$mag>=1 & s1$st %in% c("AK","HI","PR","VI")]))
