@@ -15,12 +15,12 @@ bibentry(
   year = format(Sys.Date(), "%Y"),
   note = paste0("R package version ", meta$Version, " (code and bundled data)"),
   url = "https://github.com/UChicago-ExtremeWeather/tornadoexposure",
-  doi = "10.5281/zenodo.23544842",
+  doi = "10.5281/zenodo.23544841",
   textVersion = paste0(
     "Hansen H, Nguyen J, Sanghavi P, Burrows K (", format(Sys.Date(), "%Y"),
     "). tornadoexposure: ", meta$Title, ". R package version ", meta$Version,
     " (code and bundled data). https://github.com/UChicago-ExtremeWeather/tornadoexposure.",
-    " DOI: 10.5281/zenodo.23544842."
+    " DOI: 10.5281/zenodo.23544841"
   )
 )
 
