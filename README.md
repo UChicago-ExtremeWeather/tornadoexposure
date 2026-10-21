@@ -184,7 +184,7 @@ Numbers for each point, and how they were computed: `data-raw/known_issues.md`.
   survey line farther away than the larger of the tornado's reported length and 0.1 mile, 17 of them with a usable swath. NOAA labels the survey data preliminary (accessed 2026-10-15). The notices and their exact wording are in `data-raw/known_issues.md`.
 
 ## Citation
-Data sources (accessed 2026-10-12):
+Data sources (accessed 2026-10-15):
 
 * NOAA Storm Prediction Center, [Severe Weather Database](https://www.spc.noaa.gov/wcm/).
 * U.S. Census Bureau, TIGER/Line ZCTA boundary files for [2000](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/) and [2020](https://www2.census.gov/geo/tiger/TIGER2020/ZCTA520/).
