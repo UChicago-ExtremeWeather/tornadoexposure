@@ -18,10 +18,11 @@
 #      the help pages or known_issues.md no longer matches the data); devtools::document(); devtools::check();
 #      Rscript data-raw/readme/build_readme.R (rebuilds the short README: the counts and the maps in figures/); update the access dates in
 #      inst/CITATION. The update script itself adds the new year's SPC release to data-raw/provenance_years.csv. Then cut a GitHub release.
-#   5. Zenodo release: the code archive is created automatically by Zenodo's GitHub integration when a GitHub Release is published.
-#      A published Zenodo record is permanent, so check with Kate first. v0.1.0 ships with the DOI placeholder. After publishing it,
-#      copy the DOI for all versions (the concept DOI, not the v0.1.0 one) from the Zenodo record into inst/CITATION and the README,
-#      then publish v0.1.1. There is no separate data record, because the data are bundled in the package.
+#   5. Zenodo: upload by hand to the lab Zenodo account. Never use Zenodo's GitHub integration. A published record is permanent,
+#      so check with Kate first. Bump Version in DESCRIPTION, commit, publish a GitHub Release, then on the existing Zenodo record
+#      click New version, upload the new Release zip, update the Version field, and publish. The "cite all versions" DOI
+#      (10.5281/zenodo.23544841) is already in inst/CITATION and never changes. There is no separate data record, because the data
+#      are bundled in the package.
 #
 # INSTALLED SIZE: R CMD check reports a NOTE that the installed size (about 5.2 MB) is above the 5 MB guideline of CRAN. The package is not
 # published to CRAN, so the note is expected.
