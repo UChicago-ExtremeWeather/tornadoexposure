@@ -10,21 +10,21 @@
 #      "Initial release of the <year> Database". So wait for that entry, and for an updated release if SPC posts one.
 #   2. Set `latest_year` below (or UPDATE_LATEST_YEAR=2026 in the environment).
 #   3. Rscript data-raw/update_data.R
-#   4. Follow-up, in this order: Rscript data-raw/qa/check_data_integrity.R (stops if a check on the data fails);
+#   4. Follow-up (Rscript data-raw/qa/run_post_update_checks.R runs the QA steps in this order), in this order: Rscript data-raw/qa/check_data_integrity.R (stops if a check on the data fails);
 #      the QA scripts that save the numbers quoted in known_issues.md (data-raw/qa/05, 06, 07, 08, 09, 12 and 39; the NCEI and SPC
 #      downloads are small, 8 MB for the SPC 2024 file and 232 MB for NCEI);
-#      the QA scripts that write the tables into data-raw/known_issues.md (data-raw/qa/11c, 19, 20, 23, 36, 38d, 44, 49 (before 44b), 44b, 45, 46 and 47; 23 also writes the
+#      the QA scripts that write the tables into data-raw/known_issues.md (data-raw/qa/11c, 19, 20, 23, 36, 38d, 44, 49 (before 44b), 44b, 45, 46, 47, 52 and 52b to 52d, 55, 58, 60, 61 and 62; 23 also writes the
 #      distance, Moore and boundary-year sections); data-raw/qa/48 and 50 (the first-map timing and the README numbers, data-raw/readme/numbers.csv; 50 after 02, 29, 46, 47 and 48); Rscript data-raw/qa/check_documented_claims.R (stops, with a table, if a number in the README,
 #      the help pages or known_issues.md no longer matches the data); devtools::document(); devtools::check();
 #      Rscript data-raw/readme/build_readme.R (rebuilds the short README: the counts and the maps in figures/); update the access dates in
 #      inst/CITATION. The update script itself adds the new year's SPC release to data-raw/provenance_years.csv. Then cut a GitHub release.
 #   5. Zenodo: upload by hand to the lab Zenodo account. Never use Zenodo's GitHub integration. A published record is permanent,
-#      so check with Kate first. Bump Version in DESCRIPTION, commit, publish a GitHub Release, then on the existing Zenodo record
+#      so confirm with the maintainer first. Bump Version in DESCRIPTION, commit, publish a GitHub Release, then on the existing Zenodo record
 #      click New version, upload the new Release zip, update the Version field, and publish. The "cite all versions" DOI
 #      (10.5281/zenodo.23544841) is already in inst/CITATION and never changes. There is no separate data record, because the data
 #      are bundled in the package.
 #
-# INSTALLED SIZE: R CMD check reports a NOTE that the installed size (about 5.2 MB) is above the 5 MB guideline of CRAN. The package is not
+# INSTALLED SIZE: R CMD check reports a NOTE that the installed size (about 5.3 MB) is above the 5 MB guideline of CRAN. The package is not
 # published to CRAN, so the note is expected.
 #
 # WHAT IT DOES

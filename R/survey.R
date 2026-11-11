@@ -20,7 +20,7 @@
 
 # Survey paths with the centroid of each requested ZCTA within v$threshold km.
 # The swaths are the 50 m simplified polygons in survey_tracks, so distances
-# differ from those to the full-resolution swaths by at most 50 m.
+# differ from those to the 20 m swaths (the swaths of survey_exposure) by at most 50 m.
 .survey_distance <- function(v) {
   trk <- .survey_tracks()
   tt <- .tracks()
@@ -141,18 +141,14 @@
 #'
 #' `r paste(readLines("data-raw/survey/settings_help.md"), collapse = "\n")`
 #'
-#' **The data are preliminary.** The service description reads: "While the data
-#' has been quality controlled, it is still considered preliminary." The service's
-#' copyright text is "NOAA National Weather Service". Its item on the NOAA
-#' GeoPlatform (<https://www.arcgis.com/home/item.html?id=b6b9dd55450a4f64bcafb3cd6e005a5c>)
-#' gives the credit "NOAA/National Weather Service" and the constraint "All data
-#' is considered preliminary and unofficial." A GeoPlatform page for the Damage
-#' Assessment Toolkit
-#' (<https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat>)
-#' says "This dataset is intended for public access and use."; that page links the
-#' viewer and an older service address that no longer exists, so it is not
-#' confirmed to refer to the service used here. No notice found sets terms of use
-#' or asks for a particular citation. The exact wording of every notice is in
+#' **The data are preliminary, and intended for public use.** The stewards of the
+#' Damage Assessment Toolkit describe the dataset as intended for public access and
+#' use and as preliminary
+#' (<https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat>).
+#' The service description reads: "While the data has been quality controlled, it is
+#' still considered preliminary." The service's copyright text is "NOAA National
+#' Weather Service". No license text was found, and this package does not claim that
+#' the data are in the public domain. The exact wording of every notice is in
 #' `data-raw/known_issues.md`.
 #'
 #' **What the survey layer is.** The survey data are damage zones mapped by National

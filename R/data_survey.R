@@ -70,8 +70,9 @@
 #' EPSG:4326, simplified to 50 m (no point of the outline moves by more than
 #' 50 m; `data-raw/known_issues.md` gives the resulting change in area).
 #' They are used for plotting (`add_tracks(geometry = "survey")`) and for
-#' distances to ZCTA centroids; the exposure columns come from the full-resolution
-#' swaths, not from these polygons.
+#' distances to ZCTA centroids; the exposure columns come from the swaths built from
+#' the polygons as fetched (generalized by the service to 0.0002 degrees, about 20 m),
+#' not from these 50 m polygons.
 #'
 #' @format An sf data frame with `r format(nrow(survey_tracks), big.mark = ",")`
 #'   rows and 2 variables: `tornado_id` and `geometry`.

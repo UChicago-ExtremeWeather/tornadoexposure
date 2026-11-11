@@ -154,6 +154,11 @@ get_survey_data(geo_list = "731", year_range = 2013, magnitude = 5)[
 #> 4 73173              0.014        5.182
 ```
 
+## What is and is not done to the source data
+The data start in 1996, as the original package did; SPC's file begins in 1950 and no reason for the 1996 start is documented. SPC's coordinates, length, width, rating, injuries, deaths and loss are used as SPC gives them, with these exceptions in this version: a width of 0 is replaced by 10 yards (473 tornadoes); a tornado with no usable end point (10,384, 27.3%) is drawn as a disc around its start point; `area_prop_affected` is capped at 1 (3 rows, and 1 in the survey layer); ZCTA centroids are rounded to 5 decimals (98,932 rows); the survey polygons were generalized by the service to about 20 m (9,863 polygons) and the swaths in `survey_tracks` are simplified to 50 m (2,941); SPC's 926 segment rows and 15 columns are not included. The next version removes each of these. The complete list, with counts and what is allowed, is in `data-raw/known_issues.md` (What is and is not done to the source data).
+
+A modeled path is a straight line at SPC's single width. It is not a damage boundary at scales finer than a kilometer: the largest distance between the surveyed centerline and the modeled line has a median of 0.25 km and a 90th percentile of 1.39 km (see Limitations). For pixel-scale work use the NWS damage polygons.
+
 ## Limitations
 Numbers for each point, and how they were computed: `data-raw/known_issues.md`.
 
@@ -170,7 +175,7 @@ Numbers for each point, and how they were computed: `data-raw/known_issues.md`.
   centered on the start point, because its direction is unknown. If SPC gives a length, the disc has area equal to
   length times width (`track_type = "point_equal_area"`, 10,265 tornadoes);
   if the length is 0, the disc has a radius of half the width (`"point_half_width"`, 119
-  tornadoes). Together they are 27.3% of all tornadoes.
+  tornadoes). Together they are 27.3% of all tornadoes. A disc is not a measurement: the published data draw these tornadoes as discs, and the next version places them at their start point and models no shape (`data-raw/known_issues.md`, section Tornadoes with no usable end point).
 * `pop_affected` counts the total residents (all ages) of the census blocks the path covers, assuming residents are spread evenly over each block. It uses the 2000 census for tornadoes before 2010, the 2010 census for 2010 to 2019 and the 2020 census from 2020. For tornadoes with a usable survey swath, the residents share from the modeled path divided by the share from the surveyed swath (same ZCTA) has a median of 1.19 (10th to 90th percentile 0.30 to 3.98; 5,563 tornado-ZCTA pairs). The 2020 block counts also contain noise added by the Census Bureau (`data-raw/known_issues.md`).
 * Exposure uses the Census boundary year (2000, 2010 or 2020) that matches the tornado's year: 2000 before 2010, 2010 for 2010 to 2019, 2020 from 2020. The same ZCTA code can cover a different area in different boundary years: 8.2% of the 32,923 codes in both the 2010 and 2020 files have an overlap ratio below 0.5 (15.9% between 2000 and 2010). The overlap ratio is the area the two shapes share divided by the area they cover together.
 * 588 tornadoes (1.5%) overlap no ZCTA and have no rows in `tornado_exposure`: 109 are over water, 393 are over land with no ZCTA nearby, 86 are on land that is mostly covered. They stay in `tornado_tracks`, and their loss is not assigned to any ZCTA (definitions: `data-raw/known_issues.md`).

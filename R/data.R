@@ -25,7 +25,11 @@
 #' tracks are `r sprintf("%.1f", 100 * mean(tornado_tracks$track_type != "line"))`% of all tornadoes
 #' (`r format(sum(tornado_tracks$track_type == "point_equal_area"), big.mark = ",")` with `"point_equal_area"` and
 #' `r format(sum(tornado_tracks$track_type == "point_half_width"), big.mark = ",")` with `"point_half_width"`);
-#' excluding `track_type != "line"` shows how much they matter.
+#' excluding `track_type != "line"` shows how much they matter. A disc is not a
+#' measurement: the published data draw these tornadoes as discs, and the next
+#' version places them at their start point and models no shape (the real path may
+#' extend up to the reported length from the start in an unknown direction;
+#' `data-raw/known_issues.md`, section Tornadoes with no usable end point).
 #'
 #' **Width and straight-line limitations.** SPC gives one width in yards for each
 #' tornado. NWS instructions for Storm Data define the path width entered for a

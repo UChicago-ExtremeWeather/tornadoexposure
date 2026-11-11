@@ -22,6 +22,54 @@ changed to work around any of these items.
   (`get_survey_data()`). Its terms (`status` values, usable damage swath, swath filter) are defined in the section
   "Path accuracy" under "Values of `status`".
 
+<!-- fidelity:start -->
+## What is and is not done to the source data
+
+The aim of the package is the highest quality of data on tornadoes, changed as little as possible. Allowed operations on source geometry are a coordinate transformation (projection), merging polygons and repairing invalid geometry, and each is listed below with how many features it touched. Any other change to a source geometry or value (simplifying, generalizing, rounding, snapping, thinning, truncating, capping, imputing, replacing or dropping) is not allowed. Where a transformation is needed, the raw value is kept in its own column.
+
+This is every operation applied to source data or geometry in the published version, with the number of records or features it touches. The last column says what the next version does.
+
+| Operation | What it touches | Allowed | Next version |
+|---|---|---|---|
+| SPC records before 1996 are not used | 36,003 of 74,956 rows of the SPC file | Yes: the package starts in 1996 (inherited from the original package; no reason is documented) | kept |
+| SPC segment rows (`sg` = 2) and continuation rows (`sg` = -9) are not included | 926 rows from 1996 on (873 segments, 53 continuation rows) | No: a source record is dropped | the complete SPC record is shipped as its own dataset |
+| SPC columns are not included | 15 of 31 columns (`time`, `tz`, `st`, `stf`, `stn`, `closs`, `ns`, `sn`, `f1`, `f2`, `f3`, `f4`, `fc`, `edat`, `etime`) | No: source values are dropped | shipped in the complete SPC record |
+| SPC records without a valid start are dropped | 0 records | No (nothing is dropped now) | stop and report instead |
+| Identifiers shared by two tornadoes are renamed `_1`, `_2` | 4 records (2001_56, 2002_506) | Yes: an identifier, not a source value | kept; the raw `om` stays in the complete SPC record |
+| Loss in millions of dollars (before 2007) is converted to dollars with `round(loss * 1e6)` | 6,447 values; 0 changed by the rounding (largest difference 4.7e-10 dollars; at most three decimals in millions: 0: 402; 1: 1312; 2: 4057; 3: 676 values with 0, 1, 2, 3 decimals) | Yes: an exact conversion, and the raw value is kept in `loss_raw` | kept, exact conversion without rounding |
+| A loss of 0 becomes `NA` in `property_loss_tornado_total` | 19,567 tornadoes | Yes: the raw value is kept in `loss_raw` | kept |
+| A width of 0 is replaced by 10 yards | 473 tornadoes (138 line tracks, 335 point tracks; all from 1996 to 2006; the raw value was 0 in all of them and is not kept) | No: a source value is replaced | removed: the width stays as SPC gives it |
+| A tornado with no usable end point (end coordinates 0 or missing, or equal to the start) is drawn as a disc | 10,384 tornadoes (27.3%): 10,265 equal-area discs, 119 half-width discs; 7,849 from 1996 to 2006 and 2,535 from 2007 on; 10,383 have an end equal to the start and 1 an end of 0; the raw end coordinates are not stored) | No: geometry that is not in the source is invented | removed: placed at the start point, no shape modeled, raw coordinates kept |
+| The modeled path is a straight line from SPC's start to SPC's end, buffered by half of SPC's single width with flat ends | 27,643 tornadoes | A model, not a source geometry: it is not a damage boundary | kept for tornadoes with a start, an end and a width |
+| Coordinates are transformed to EPSG:5070 for areas and distances, and to EPSG:4269 for block points | every geometry | Yes: coordinate transformation | kept |
+| Polygons repaired with `st_make_valid()`: ZCTA boundaries (as read, and after the transformation) | 2000 file: 0 of 32,038; 2010 file: 1 of 33,120; 2020 file: 0 of 33,791 | Yes: repair of invalid geometry | kept; the number repaired is reported |
+| Polygons repaired with `st_make_valid()`: census blocks (counted over all blocks as read; the pipeline repairs only the blocks near a path) | invalid blocks: 2000: 0 of 8,262,363; 2010: 0 of 11,155,486; 2020: 0 of 8,174,955 | Yes: repair of invalid geometry | kept; the number repaired is reported |
+| Polygons repaired with `st_make_valid()`: survey damage polygons as fetched (generalized) and the swaths | 30 of 9,863 polygons were invalid as fetched; survey lines: 0 of 11,624 | Yes: repair of invalid geometry | kept; the number repaired is reported |
+| Intersections of paths with ZCTAs: pieces that are not polygons are dropped; pieces of one tornado in one ZCTA are merged | 0 pieces of zero area; 58,162 tornado-ZCTA rows | Yes: merging polygons | kept |
+| `area_prop_affected` is capped at 1 (intersection with the ZCTA polygon divided by `ALAND`) | 3 of 58,162 rows of `tornado_exposure` (line 2, point_equal_area 1) and 1 row of `survey_exposure`; the uncapped ratio is above 1 in 3 rows, at most 1.019 | No: a source-derived value is capped and the uncapped value discarded | removed: the uncapped ratio is shipped with `intersection_m2` and the ZCTA areas |
+| `area_prop_affected` divides an intersection with the full ZCTA polygon (land and water) by `ALAND` (land only) | all rows; against the full polygon the ratio differs by more than 1% in 19,045 rows, by more than 10% in 2,344 and by more than 50% in 270 | A basis mismatch, not a change of a source value | documented; both areas are shipped (see the area basis below) |
+| `zcta_centroids`: longitude and latitude are rounded to 5 decimals | 98,932 rows | No: coordinates are rounded | removed |
+| `zcta_centroids`: the geometric centroid of a ZCTA with no residents is replaced by a point on the polygon surface when it falls outside the polygon | 4 of 342 ZCTA-years with no residents (2000: 1; 2010: 1; 2020: 2) | A rule for a derived value, listed | kept and listed |
+| Population: a block with an `NA` population is counted as 0 | 0 blocks with an `NA` population in the three census years | No: a missing value is replaced | stop and report instead |
+| Population: the share of a block inside a path is capped at 1 | 478,994 path-block pieces recomputed for the modeled paths in 156 of 156 state-census year files (2000: 52; 2010: 52; 2020: 52 states); 31,098 above 1 (0 above 1 by more than 1e-9); largest share 1.000000000047 | No: a value is capped | removed: stop if a share exceeds 1 beyond floating-point tolerance |
+| Population: a block whose internal point lies in more than one ZCTA keeps only its first ZCTA (`!duplicated(GEOID)`) | 5 blocks (5 rows dropped) in 2000: 2; 2010: 3; 2020: 0; blocks with a repeated GEOID in the block file: 0; blocks without an internal point: 0 | No: rows are dropped | removed: stop on a duplicated GEOID |
+| Survey: damage features with no `stormdate` are not fetched (the fetch filters on date) | lines 1, polygons 254, points 41 | No: source features are dropped | all features are fetched |
+| Survey: only some fields of the lines and polygons are fetched; the damage points are not used | lines: 11 of 26 fields; polygons: 5 of 17 fields; points: none of 241,456 points | No: source values are dropped | all fields of all layers are fetched |
+| Survey: damage polygons are fetched generalized by the service to 0.0002 degrees (`maxAllowableOffset`) | 9,863 polygons, 144,713 vertices; the swaths and `survey_exposure` are computed from them | No: geometry is generalized | removed: polygons fetched at full resolution and stored unmodified |
+| Survey: exact copies of a survey line are merged | 214 lines (11,624 to 11,410); all object ids are kept in `survey_line_ids` | Yes: merging identical features | kept or removed with the pairing rule |
+| Survey: for a multipart survey line only the longest part is used in the pairing distance | 0 lines are multipart | No (not triggered) | removed |
+| Survey: polygons are filtered before they are merged into a swath (rated EF0 to EF5; at least 90% of the area within the SPC width plus 500 m) | 6,332 polygon-line crossings in 10,671 pairs; 281 dropped as not rated EF0 to EF5, 125 dropped by the 90% rule, 5,926 kept; 4,035 of 9,863 polygons are in no swath; 1,274 polygons have an `efscale` other than EF0 to EF5 | No: source polygons are dropped | all polygons are shipped (`survey_zones`) with their rating |
+| Survey: the kept polygons of a pair are merged into one swath, so each zone's rating is lost | 2,941 swaths (5,828 distinct polygons) | Merging is allowed; discarding the rating is not | ratings are kept in `survey_zones` |
+| Survey: the swaths in `survey_tracks` are simplified to 50 m (`st_simplify`) | 2,941 swaths; 56,287 vertices before and 40,946 after; the area changes by a median of 2.1%, 90th percentile 20.4%, largest 322.2% | No: geometry is simplified | removed |
+| Survey: a soft hyphen (U+00AD) is removed from one event id | 1 id | No: a source string is changed | kept raw |
+| Maps use generalized cartographic boundaries (`cb = TRUE`) while exposure uses the full TIGER/Line boundaries | every map | No: generalized geometry | removed: maps use the same boundary files as the exposure calculation |
+
+**The modeled path is not a damage boundary at fine scales.** A modeled path is a straight line from SPC's start to SPC's end, drawn at SPC's single width. It does not follow the curve of a real path or its changing width, so it is not a damage boundary at scales finer than a kilometer. For the 2,919 line tracks with a surveyed swath, the largest distance between the surveyed centerline and the modeled line has a median of 0.25 km and a 90th percentile of 1.39 km; by straight-line length: under 5 miles (1,860 tornadoes): median 0.11 km, 90th percentile 0.53 km; 5 to 20 miles (880 tornadoes): median 0.65 km, 90th percentile 1.71 km; over 20 miles (179 tornadoes): median 2.02 km, 90th percentile 4.84 km. The modeled path area is a median of 1.21 times the surveyed swath area (10th to 90th percentile 0.40 to 2.20; 2,941 tornadoes with a usable swath). For pixel-scale work use the NWS damage polygons.
+
+**Area basis.** `area_prop_affected` is the area of the path inside the ZCTA polygon divided by the ZCTA's land area (`ALAND`). The Census Bureau's ZCTA polygons include water, so the numerator can include water while the denominator does not. The polygon area is a median of 1.00, 1.01, 1.01 times `ALAND` in the 2000, 2010 and 2020 files (largest 7.5, 14.5, 15.1; ZCTAs with more than 10% water: 103, 611, 541). Against the area of the full polygon (the same geometry as the numerator, which cannot exceed 1), the published value differs by more than 1% in 19,045 of 58,162 rows, by more than 10% in 2,344 and by more than 50% in 270. In rows of ZCTAs with more than half of their area in water (125 rows) the land-based share is a median of 2.80 times the polygon-based share (largest 15.1). The land basis is above 1 in 3 rows (largest 1.019), which is what the cap touched. With `area_thresh` of 0.01, 0.05, 0.1, 0.5 (example values, not recommendations) the land basis returns 8,427, 1,839, 684, 42 rows and the polygon basis 8,281, 1,788, 655, 40. No land-only geometry is available to intersect with, so a land-only share cannot be computed exactly; the next version ships `intersection_m2`, `zcta_land_area_m2` and the polygon area, so a share can be computed on either basis.
+
+<!-- fidelity:end -->
+
 ## Property loss (SPC `loss`)
 
 * SPC loss of 0 means unknown, not $0 (NOAA's wording), so `property_loss_tornado_total`
@@ -388,8 +436,8 @@ Every notice found about the data of the survey layer, with its wording and loca
 * **Copyright text** of the same service (field `copyrightText`): "NOAA National Weather Service". The three layers (0 to 2) have no description or copyright text of their own.
 * **NOAA GeoPlatform item** for the same service (<https://www.arcgis.com/home/item.html?id=b6b9dd55450a4f64bcafb3cd6e005a5c>, owner `nws.dat_noaa`, shared publicly, url field equal to the service above): credit "NOAA/National Weather Service"; use constraint "All data is considered preliminary and unofficial. While the data has been quality controlled, it is still considered preliminary. Official statistics for severe weather events can be found in the Storm Data publication, available from the National Centers for Environmental Information (NCEI) at: https://www.ncdc.noaa.gov/IPS/sd/sd.html". The item gives no license. The item description adds "Service defaults to show data with 'stormdate' for the preceding two weeks."
 * **Viewer** (<https://apps.dat.noaa.gov/StormDamage/DamageViewer/>): the page is a JavaScript application whose configuration could not be read (access denied), so any splash text it shows was not read. Its portal item (<https://www.arcgis.com/home/item.html?id=96a415322c174d78b5cd02fa68650cfd>) has the same "still considered preliminary" statement and adds: "This web application can be used to view and query the DAT database. In addition, data may be extracted as a shapefile or kmz file using the 'Extract' widget."
-* **GeoPlatform page** (<https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat>, page item <https://www.arcgis.com/home/item.html?id=b2b1055dffbc4818a4dc185b72efe2a8>, last modified 18 April 2025, on the GeoPlatform Disasters site, not in the NOAA GeoPlatform organization): under "Access & Use Information": "Public: This dataset is intended for public access and use." Under "Disclaimers": "While the data has been quality controlled, it is still considered preliminary." Its links are the viewer above and a map service, `https://services.dat.noaa.gov/arcgis/rest/services/DamageAssessmentToolkit/DamageFlexViewer/MapServer`, which returns "Service not found" today and is not the service queried here (`nws_damageassessmenttoolkit/DamageViewer/FeatureServer`). The page therefore describes the Damage Assessment Toolkit dataset in general; it is not confirmed to refer to this service.
-* **What was not found:** no notice sets terms of use, a license or a citation format for these data. The general NWS statement for NWS web pages (<https://www.weather.gov/disclaimer>) is about web pages and is not quoted here.
+* **GeoPlatform page** (<https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat>, page item <https://www.arcgis.com/home/item.html?id=b2b1055dffbc4818a4dc185b72efe2a8>, last modified 18 April 2025, on the GeoPlatform Disasters site, not in the NOAA GeoPlatform organization): under "Access & Use Information": "Public: This dataset is intended for public access and use." Under "Disclaimers": "While the data has been quality controlled, it is still considered preliminary." Its links are the viewer above and a map service, `https://services.dat.noaa.gov/arcgis/rest/services/DamageAssessmentToolkit/DamageFlexViewer/MapServer`, which returns "Service not found" today and is not the service queried here (`nws_damageassessmenttoolkit/DamageViewer/FeatureServer`). The page therefore describes the Damage Assessment Toolkit dataset in general (its stewards describe it as intended for public access and use and as preliminary); its map service link is an older address that no longer exists, so the page does not name the service queried here.
+* **What was not found:** no notice sets terms of use, a license or a citation format for these data (no license text was found; the package does not claim that the data are in the public domain). The general NWS statement for NWS web pages (<https://www.weather.gov/disclaimer>) is about web pages and is not quoted here.
 
 <!-- unchecked:start -->
 ## Numbers that no script recomputes
@@ -397,15 +445,84 @@ Every notice found about the data of the survey layer, with its wording and loca
 `data-raw/qa/check_documented_claims.R` matches 128 numbers or statements in the README, the help pages and this file against the data (section 3b covers the constants, ranges, definitions and examples stated in the README and the help pages, as checks of the data and the code). The numbers it cannot match to a computed value are hand-written; they are listed in `data-raw/qa/out/numbers_without_a_script.csv`. In the README and the help-page sources they are all of these kinds:
 
 * example value or argument (run when the README is built or the examples are checked): 40
-* unit or rounding constant (section 3b of this script): 30
+* unit or rounding constant (section 3b of this script): 39
 * range endpoint or rule (section 3b of this script): 29
 * zero as a value or rule (section 3b of this script): 21
+* percentile label, cut-off or definition: 12
 * code or identifier: 11
-* percentile label, cut-off or definition: 11
 * list numbering in quoted source text: 2
 
 In this file 259 numbers outside the generated sections are not matched: cut-offs and their rationale, dates, quoted source text, counts from earlier runs of the QA scripts, and values read from external documents. They are not checked by a script.
 <!-- unchecked:end -->
+
+<!-- st-louis:start -->
+## A known case: the St. Louis tornado of 16 May 2025
+
+SPC's 2025 file (released 24 April 2026) has one whole-track record for the tornado, `2025_2505161339-01`: 23.22 miles, a width of 1,750 yards, rating 2, 38 injuries and 4 deaths, from 38.6440, -90.3468 to 38.7971, -89.9733 (Missouri into Illinois). The file also has two segment rows of it (`2505161339-02`: 8.91 miles, rating 2; `2505161339-03`: 14.31 miles in Illinois, rating 1), which the published data do not include. The NCEI Storm Events file has three events for it, rated EF2 (2.3 miles), EF0 (6.61 miles, with 38 injuries and 4 deaths) and EF1 (14.31 miles).
+
+The NWS survey data (the Damage Assessment Toolkit) have two lines for it: survey line 2671973 (EF3, 12.29 miles, width 3,168 yards, from 38.6439, -90.3466 to 38.7197, -90.1499) and survey line 2671572 (EF1, 11.64 miles, width 0 yards, from 38.7026, -90.1526 to 38.7967, -89.9756). The NWS reanalysis of May 2026 ([Updated Damage Assessment for May 16, 2025 St. Louis Tornado](https://www.weather.gov/lsx/STLTornado); reported by [STLPR on 15 May 2026](https://www.stlpr.org/news-briefs/2026-05-15/may-16-tornado-reached-1-8-miles-wide)) describes an EF-3 tornado with a width increased to 3,168 yards and a second tornado rated EF-1 with a path width of 525 yards. SPC's release of 24 April 2026 came before this update, so SPC's rating of 2 and its single record predate it. SPC can predate NWS revisions in general, and the package stores each SPC release as it was (stored years are frozen).
+
+**What the survey layer holds.** `survey_matches` pairs the tornado with survey line 2671572 (EF1): distance 8.99 km, length ratio 0.5014, different state (`same_state` = FALSE), second-closest distance 9.11 km, status `included`. The ratio of 0.5014 is the length of that line (11.64 miles) over SPC's (23.22 miles): the line lies in the Illinois part of the SPC path. `survey_exposure` has 3 ZCTAs for it (62025, 62026, 62040), none in Missouri, while the SPC rows have 14 ZCTAs (10 of them in Missouri, 4 in Illinois). The EF3 line, which holds the main damage (38 injuries and 4 deaths), is not in the survey layer, because the pairing allows one survey line per tornado.
+
+**Why the pairing chose this line.** The distance of the pairing compares 21 points of the survey line with 21 points of the SPC line by position (first with first, last with last). A survey line that covers only part of the SPC path therefore has a large distance even when it lies on the path: for the two lines the distance is 9.11 km (EF3 line) and 8.99 km (EF1 line); the one-sided distance (the mean distance from the survey line's own 21 points to the SPC line) is 1.48 km and 1.29 km. The EF1 line was chosen because its distance was the smaller of the two by 0.12 km.
+
+**How often a swath covers only part of the SPC path.** Of the 2,926 included line tracks (a usable swath and a straight SPC line) on a fresh full-resolution fetch, 113 (3.9%) have a swath whose extent along the SPC start-to-end line is less than 80% of that line (the extent is measured by projecting the swath's vertices onto the SPC line, from 0 at the start to 1 at the end; 80% is a descriptive value, not a tested choice).
+
+A check of the documented state of this case is in `data-raw/qa/check_data_integrity.R` (labeled as a known limitation, expected to change when the pairing allows several lines per tornado).
+<!-- st-louis:end -->
+
+<!-- no-end-point:start -->
+## Tornadoes with no usable end point
+
+A tornado has no usable end point when SPC's end coordinates are missing, equal to 0, or equal to the start coordinates. 10,384 of the 38,027 tornadoes (27.3%) are of this kind (10,265 with a reported length above 0, 119 with a reported length of 0). 7,849 of them (75.6%) are from 1996 to 2006 and 2,535 (24.4%) from 2007 on. The published data draw them as discs centered on the start point (a disc is not a measurement: the real path has an unknown direction); the next version places them at their start point and models no shape.
+
+**By rating.**
+
+| Rating | All tornadoes | No usable end point | Share of this rating | Share of all such tornadoes |
+|---|---|---|---|---|
+| EF0 | 20,531 | 8,448 | 41.1% | 81.4% |
+| EF1 | 11,825 | 1,393 | 11.8% | 13.4% |
+| EF2 | 3,123 | 178 | 5.7% | 1.7% |
+| EF3 | 830 | 17 | 2.0% | 0.2% |
+| EF4 | 157 | 0 | 0.0% | 0.0% |
+| EF5 | 15 | 0 | 0.0% | 0.0% |
+| unknown | 1,546 | 348 | 22.5% | 3.4% |
+
+**Reported length** (SPC's `len`, in miles; median 0.20, 90th percentile 1.00, longest 80.0; 10,265 of 10,384 (98.9%) have a length above 0):
+
+| Reported length | Tornadoes | Share |
+|---|---|---|
+| 0 (reported length is zero) | 119 | 1.1% |
+| above 0 and under 0.5 mile | 7,233 | 69.7% |
+| 0.5 to under 1 mile | 1,584 | 15.3% |
+| 1 to under 5 miles | 1,331 | 12.8% |
+| 5 miles or more | 117 | 1.1% |
+
+**Injuries and deaths.** These tornadoes account for 1,221 of 28,386 injuries (4.3%) and 38 of 2,196 deaths (1.7%); 27 of them have at least one death.
+
+**Reported width.** SPC's width (`wid`, yards) is 0 or missing for 335 of these tornadoes (3.2%); for the others the median is 30 yards and the 90th percentile 100 yards. In the published data a width of 0 or missing was replaced by 10 yards in all tornadoes (473 of them; 335 no usable end point).
+
+**By year.**
+
+| Years | Tornadoes | No usable end point | Share |
+|---|---|---|---|
+| 1996 | 1,173 | 700 | 59.7% |
+| 1997-2001 | 6,201 | 3,798 | 61.2% |
+| 2002-2006 | 6,491 | 3,351 | 51.6% |
+| 2007-2010 | 5,300 | 971 | 18.3% |
+| 2011-2015 | 5,678 | 600 | 10.6% |
+| 2016-2020 | 6,180 | 516 | 8.3% |
+| 2021-2025 | 7,004 | 448 | 6.4% |
+
+**By era and rating** (share of tornadoes with no usable end point):
+
+| Era | EF0 | EF1 to EF5 | Unknown |
+|---|---|---|---|
+| 1996-2006 | 72.2% | 28.1% | none |
+| 2007 on | 17.1% | 1.9% | 22.5% |
+
+**Plain reading.** 81.4% of these tornadoes are EF0 and the median reported length is 0.20 mile, but SPC gives a length above 0 for 98.9% of them, 1,448 are 1 mile or longer, 117 are 5 miles or longer, and the longest is 80.0 miles, so they are not all brief touchdowns: the real path may extend up to the reported length from the start point in an unknown direction. The share follows the era more than the strength: between 1996-2006 and 2007 on it falls by 55 percentage points among EF0 tornadoes and 26 points among EF1 to EF5, while within 1996-2006 it differs by 44 points between EF0 and EF1 to EF5 (15 points from 2007 on). Coordinates before 2007 are rounded to 0.01 degrees, so start and end points of short tornadoes often coincide.
+<!-- no-end-point:end -->
 
 ## Point tracks
 

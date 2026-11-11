@@ -90,7 +90,11 @@ extent of the disc is a stand-in, because the direction is unknown. Point
 tracks are 27.3\% of all tornadoes
 (10,265 with \code{"point_equal_area"} and
 119 with \code{"point_half_width"});
-excluding \code{track_type != "line"} shows how much they matter.
+excluding \code{track_type != "line"} shows how much they matter. A disc is not a
+measurement: the published data draw these tornadoes as discs, and the next
+version places them at their start point and models no shape (the real path may
+extend up to the reported length from the start in an unknown direction;
+\code{data-raw/known_issues.md}, section Tornadoes with no usable end point).
 
 \strong{Width and straight-line limitations.} SPC gives one width in yards for each
 tornado. NWS instructions for Storm Data define the path width entered for a

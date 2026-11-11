@@ -132,18 +132,14 @@ requested years with no survey swaths at all.
 
 \strong{Polygon resolution.} The damage polygons were fetched with the service's generalization set to 0.0002 degrees (about 20 m), and the polygons stored in \code{survey_tracks} for plotting and distances are simplified to 50 m (no outline point moves by more than 50 m). Against full-resolution polygons, the area of the 20 m swaths has a median change of -0.18\% and a 90th percentile of the absolute change of 13.64\% (largest 126.8\%); no tornado changes usability. The 50 m polygons differ from the 20 m swaths by a median of -0.37\% and a 90th percentile of 20.37\% (largest 322.2\%), which matters for small swaths. The exposure columns of \code{survey_exposure} come from the 20 m swaths, so only plots and \code{centroid_dist_km} use the simplified polygons.
 
-\strong{The data are preliminary.} The service description reads: "While the data
-has been quality controlled, it is still considered preliminary." The service's
-copyright text is "NOAA National Weather Service". Its item on the NOAA
-GeoPlatform (\url{https://www.arcgis.com/home/item.html?id=b6b9dd55450a4f64bcafb3cd6e005a5c})
-gives the credit "NOAA/National Weather Service" and the constraint "All data
-is considered preliminary and unofficial." A GeoPlatform page for the Damage
-Assessment Toolkit
-(\url{https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat})
-says "This dataset is intended for public access and use."; that page links the
-viewer and an older service address that no longer exists, so it is not
-confirmed to refer to the service used here. No notice found sets terms of use
-or asks for a particular citation. The exact wording of every notice is in
+\strong{The data are preliminary, and intended for public use.} The stewards of the
+Damage Assessment Toolkit describe the dataset as intended for public access and
+use and as preliminary
+(\url{https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat}).
+The service description reads: "While the data has been quality controlled, it is
+still considered preliminary." The service's copyright text is "NOAA National
+Weather Service". No license text was found, and this package does not claim that
+the data are in the public domain. The exact wording of every notice is in
 \code{data-raw/known_issues.md}.
 
 \strong{What the survey layer is.} The survey data are damage zones mapped by National
