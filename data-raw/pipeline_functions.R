@@ -9,8 +9,8 @@ options(tigris_use_cache = TRUE)
 area_crs <- .area_crs
 yd_to_m <- .yd_to_m
 mi_to_m <- .mi_to_m
-min_width_yd <- 10      # NOAA documents a 30 foot (10 yard) minimum width
-first_year <- 1996
+min_width_yd <- 10      # replaces an SPC width of 0 or missing. 10 yards (30 feet) is the minimum width in SPC's older format description (torforma.doc: "The minimum width is assumed to be 30 feet"); it is not a NOAA directive and SPC's current database description gives no minimum. The replaced raw value is not kept (to be removed: the width is to stay as SPC gives it)
+first_year <- 1996      # the package starts in 1996. SPC's file starts in 1950; 1996 is the start of the original package, inherited here, and no reason for it is documented
 vint_of <- function(y) ifelse(y < 2010, 2000L, ifelse(y < 2020, 2010L, 2020L))
 
 # ---- SPC file ---------------------------------------------------------------

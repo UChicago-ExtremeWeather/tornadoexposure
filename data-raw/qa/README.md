@@ -47,6 +47,17 @@ the release year in the data and warns if its checksum differs from `data-raw/pr
 | `48_first_map_timing.R` | Time and download size of the first and second `map_exposure()` call with an empty boundary-file cache |
 | `49_date_window_check.R` | Pairs by survey date minus SPC date, and the CST/UTC explanation of 1-day differences; read by `44b` |
 | `50_readme_numbers.R` | Collects the README numbers that come from other QA scripts into `data-raw/readme/numbers.csv` |
+| `51_dat_st_louis_extract.R` | Extracts the St. Louis event of 15 to 17 May 2025 from every layer of the live survey service (all fields, full resolution, native spatial reference) into a GeoPackage outside the repository, with a text file of the queries and counts |
+| `52_fidelity_audit_counts.R`, `52b_block_validity_duplicates.R`, `52c_block_fraction_check.R`, `52d_centroid_fix_count.R` | Counts for the audit of every operation applied to the source data: SPC rows and columns not used, widths replaced, point tracks, loss conversion, capped rows, centroid rounding, survey fetch and swath filter, polygons repaired, blocks with several ZCTAs, block shares above 1 (`52b` and `52c` are slow: one run per census year) |
+| `53_dat_full_fetch.R` | Fetches every feature of every layer of the survey service (all fields, full resolution) and records the download size and time |
+| `54a_ncei_download.R`, `54b_ncei_comparison.R` | Downloads the NCEI Storm Events files for 2007 to 2025 and compares every SPC tornado with them (matching method in the header) |
+| `55_area_basis.R` | Recomputes every tornado-ZCTA intersection and keeps the pieces needed to compare the area bases (land only against land and water) |
+| `56_rating_check.R` | SPC rating against NCEI, the survey line efscale and the SPC segment rows; the St. Louis rows; the current SPC file against the stored copy |
+| `57_dat_inventory.R` | The layers, fields and counts of the survey service, SPC tornadoes with a survey feature near the path, event_id and timestamps |
+| `58_pairing_study.R` | Pairing rules compared on a full-resolution fetch (none has a distance cut-off); unpaired lines; extent of the swath along the SPC chord |
+| `59_decision_impact.R` | Effect of placing tornadoes with no usable end point at their start, of widths of 0, of full TIGER/Line boundaries for maps, and the sizes of unaltered datasets |
+| `60_no_end_point_section.R`, `61_fidelity_section.R`, `62_st_louis_section.R` | Write the sections "Tornadoes with no usable end point", "What is and is not done to the source data" and the St. Louis case of `known_issues.md` |
+| `run_post_update_checks.R` | Runs the post-update checks in order |
 | `check_data_integrity.R`, `check_documented_claims.R` | See above |
 | `13_counts.R` | Counts by rating, point-track and no-ZCTA shares |
 

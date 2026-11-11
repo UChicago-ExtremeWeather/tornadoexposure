@@ -272,7 +272,7 @@ tokens <- function(lines, file, skip = rep(FALSE, length(lines)), cov = NULL) {
   do.call(rbind, out)
 }
 ki <- docs$ki$lines
-gen <- rep(FALSE, length(ki)); for (tag in c("path-accuracy", "when-to-use", "distance", "moore-comparison", "population", "zcta-vintage-overlap", "zcta2000-gap", "special-cases", "fixed-settings", "unchecked")) {
+gen <- rep(FALSE, length(ki)); for (tag in c("path-accuracy", "when-to-use", "distance", "moore-comparison", "population", "zcta-vintage-overlap", "zcta2000-gap", "special-cases", "fixed-settings", "unchecked", "no-end-point", "fidelity", "st-louis")) {
   a <- grep(paste0("<!-- ", tag, ":start -->"), ki, fixed = TRUE); b <- grep(paste0("<!-- ", tag, ":end -->"), ki, fixed = TRUE); if (length(a) && length(b)) gen[a:b] <- TRUE }
 rm_chunks <- function(l) { inchunk <- FALSE; out <- character(length(l)); for (i in seq_along(l)) { if (grepl("^```", l[i])) { inchunk <- !inchunk; out[i] <- ""; next }; out[i] <- if (inchunk) "" else l[i] }; gsub("`r [^`]*`", " ", out) }
 rmd <- readLines("data-raw/readme/README.Rmd", warn = FALSE)

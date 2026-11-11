@@ -94,5 +94,14 @@ check("survey_tracks tornadoes are exactly the included tornadoes", setequal(st$
 check("survey_exposure tornadoes are included tornadoes", all(se$tornado_id %in% sm$tornado_id[sm$status == "included"]))
 check("survey_tracks are polygons in EPSG:4326", all(st_is(st, c("POLYGON", "MULTIPOLYGON"))) && identical(st_crs(st)$epsg, 4326L))
 
+# ---- known case ---------------------------------------------------------------------------------
+# known limitation: expected to change when pairing allows several lines per tornado.
+# The St. Louis tornado of 16 May 2025 (SPC 2025_2505161339-01, one record of 23.22 miles across Missouri and Illinois) is paired with one survey line, the EF1 line of the Illinois part
+# (survey line 2671572, 11.64 miles); the EF3 line of the Missouri part is not in the survey layer. The check asserts the documented current state.
+sl <- sm[sm$tornado_id == "2025_2505161339-01", ]; slz <- se$ZCTA[se$tornado_id == "2025_2505161339-01"]
+check("known limitation: St. Louis 2025_2505161339-01 is paired with survey line 2671572 only (distance 8.99 km, length ratio 0.5014, different state, second distance 9.11 km)",
+      nrow(sl) == 1 && sl$status == "included" && sl$survey_line_id == 2671572L && sl$survey_line_ids == "2671572" && round(sl$distance_km, 2) == 8.99 && round(sl$length_ratio, 4) == 0.5014 && identical(sl$same_state, FALSE) && round(sl$second_distance_tornado_km, 2) == 9.11)
+check("known limitation: the survey ZCTAs of the St. Louis tornado are the three Illinois ZCTAs 62025, 62026 and 62040 (none in Missouri)", setequal(slz, c("62025", "62026", "62040")))
+check("known limitation: the SPC rows of the St. Louis tornado include Missouri ZCTAs (63105 and others) and SPC rating 2", any(substr(d$ZCTA[d$tornado_id == "2025_2505161339-01"], 1, 2) == "63") && all(d$magnitude[d$tornado_id == "2025_2505161339-01"] == 2))
 if (length(fails)) stop(length(fails), " check(s) failed:\n  ", paste(fails, collapse = "\n  "), call. = FALSE)
 cat("\nAll", n_checks, "checks passed.\n")
