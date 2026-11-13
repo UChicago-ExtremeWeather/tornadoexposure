@@ -41,11 +41,11 @@ bibentry(
   title = "Damage Assessment Toolkit",
   author = person("NOAA National Weather Service"),
   url = "https://services.dat.noaa.gov/arcgis/rest/services/nws_damageassessmenttoolkit/DamageViewer/FeatureServer",
-  note = "Data source of the survey layer (labeled preliminary by NOAA). Accessed 2026-10-12.",
+  note = "Data source of dat_points, dat_lines and dat_polygons (preliminary data; described by its stewards as intended for public access and use). Queried 2026-11-11.",
   textVersion = paste0(
     "NOAA National Weather Service. Damage Assessment Toolkit. ",
     "https://services.dat.noaa.gov/arcgis/rest/services/nws_damageassessmenttoolkit/DamageViewer/FeatureServer ",
-    "(accessed 2026-10-12; preliminary data)."
+    "(queried 2026-11-11; preliminary data)."
   )
 )
 

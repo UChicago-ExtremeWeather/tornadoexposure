@@ -1,7 +1,8 @@
 Package: tornadoexposure
 Type: Package
 Title: Explore and Map ZCTA-Level Tornado Exposures in the United States
-Version: 0.1.0
+Version: 0.2.0
+Date: 2026-11-12
 Authors@R: c(
     person("Hailey", "Hansen", role = "aut"),
     person("Jessy", "Nguyen", role = "aut"),
@@ -11,12 +12,14 @@ Authors@R: c(
     person("Center for Climate, Health and Society (CHAS)", role = "fnd"))
 Description: This package contains data and functions to allow users to explore
     and map ZCTA-level tornado exposures in the United States from 1996 onward.
-    Data comes from the NOAA Storm Prediction Center Severe Weather Database and
-    the Census Bureau. Tornadoes of every rating, EF0 to EF5 and unknown, are
-    included. Exposure can be defined by overlap, by the share of the ZCTA's land
-    area or residents inside the path, or by the distance from the path to the
-    ZCTA's population-weighted centroid. A sensitivity layer uses National
-    Weather Service damage surveys.
+    Data comes from the NOAA Storm Prediction Center Severe Weather Database, the
+    National Weather Service Damage Assessment Toolkit and the Census Bureau.
+    The complete SPC records and tracks are included, with the SPC values as
+    given. Exposure can be defined by overlap, by the modeled share of the ZCTA's
+    area or residents inside the path, or by the distance from the SPC line to
+    the ZCTA's population-weighted centroid or boundary. The National Weather
+    Service damage points, lines and polygons are included unmodified and are
+    linked to the SPC tornadoes.
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
@@ -26,8 +29,10 @@ BugReports: https://github.com/UChicago-ExtremeWeather/tornadoexposure/issues
 Imports:
   ggplot2,
   sf (>= 1.0-15),
+  stats,
   tigris,
-  scico
+  scico,
+  utils
 Depends: 
     R (>= 3.5)
 Roxygen: list(markdown = TRUE)

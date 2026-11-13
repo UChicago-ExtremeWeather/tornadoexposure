@@ -1,6 +1,8 @@
 {
   "title": "tornadoexposure",
-  "description": "This package contains data and functions to allow users to explore and map ZCTA-level tornado exposures in the United States from 1996 onward. Data comes from the NOAA Storm Prediction Center Severe Weather Database and the Census Bureau. Tornadoes of every rating, EF0 to EF5 and unknown, are included. Exposure can be defined by overlap, by the share of the ZCTA's land area or residents inside the path, or by the distance from the path to the ZCTA's population-weighted centroid. A sensitivity layer uses National Weather Service damage surveys.",
+  "version": "0.2.0",
+  "publication_date": "2026-11-12",
+  "description": "This package contains data and functions to allow users to explore and map ZCTA-level tornado exposures in the United States from 1996 onward. Data comes from the NOAA Storm Prediction Center Severe Weather Database, the National Weather Service Damage Assessment Toolkit and the Census Bureau. The complete SPC records and tracks are included, with the SPC values as given. The National Weather Service damage points, lines and polygons are included unmodified and are linked to the SPC tornadoes.",
   "creators": [
     {
       "name": "Hansen, Hailey"
