@@ -12,7 +12,7 @@ tor_all <- S %>% select(tornado_id, era, ttype, lenbin)
 summ <- function(by) {
   grp <- by
   nt <- tor_all %>% group_by(across(all_of(grp))) %>% summarise(tornadoes=n(), .groups="drop")
-  base_rows <- base %>% left_join(S %>% select(tornado_id, era, ttype, lenbin), by="tornado_id") %>% group_by(across(all_of(grp))) %>% summarise(base_rows=n(), base_ge01=sum(area_prop>=.01), .groups="drop")
+  base_rows <- base %>% left_join(S %>% select(tornado_id, era, ttype, lenbin), by="tornado_id") %>% group_by(across(all_of(grp))) %>% summarise(base_rows=n(), base_ge01=sum(area_prop>=.01, na.rm=TRUE), .groups="drop")
   per_rep <- A %>% group_by(across(all_of(c(grp,"rep")))) %>% summarise(lost=sum(in_b & !in_r), gained=sum(!in_b & in_r), union=sum(in_b|in_r), flips=sum(flip), .groups="drop")
   tc <- A %>% filter(xor) %>% group_by(across(all_of(c(grp,"rep"))), tornado_id) %>% summarise(.groups="drop") %>% group_by(across(all_of(c(grp,"rep")))) %>% summarise(n_changed=n(), .groups="drop")
   per_rep <- per_rep %>% left_join(tc, by=c(grp,"rep")) %>% mutate(n_changed=coalesce(n_changed,0L))

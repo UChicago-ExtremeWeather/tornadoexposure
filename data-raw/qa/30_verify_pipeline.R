@@ -10,7 +10,7 @@ dl <- spc_download(max(prov$last_year))
 cat("SPC file md5:", dl$md5, "; at the build:", prov$md5[1], "; same file:", identical(dl$md5, prov$md5[1]), "\n")
 raw <- read_csv(dl$file, show_col_types = FALSE)
 b <- spc_build(spc_clean(raw, first_year:max(prov$last_year)))
-pc <- c("pop_affected", "zcta_pop", "pop_prop_affected")
+pc <- c("modeled_pop_affected", "zcta_pop", "modeled_pop_prop")
 ex <- tornado_exposure[, setdiff(names(tornado_exposure), pc)]
 cat("\ntornado_exposure (without population columns): rows", nrow(b$exposure), "vs", nrow(ex), "; identical():", identical(b$exposure, ex), "\n")
 num <- names(ex)[sapply(ex, is.numeric)]; cat("largest absolute difference by numeric column:\n"); print(signif(sapply(num, function(v) max(abs(b$exposure[[v]] - ex[[v]]), na.rm = TRUE)), 3))

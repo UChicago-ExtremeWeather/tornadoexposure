@@ -26,11 +26,11 @@ prox <- bind_rows(st_transform(p10, 5070) %>% transmute(ZCTA, src = "2010 polygo
   st_sf(ZCTA = rest$ZCTA, src = ifelse(rest$aland > 0, "disc (official land area)", "point (zero land area)"), geometry = st_geometry(st_buffer(pts5, ifelse(rest$aland > 0, sqrt(rest$aland / pi), 1)))))
 load("data/tornado_tracks.rda"); load("data/tornado_exposure.rda")
 yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4)); tt <- tornado_tracks[yr <= 2009, ]
-pp <- st_sf(tid = tt$tornado_id, geometry = .path_polygon(tt, tt$wid_yd, tt$len_mi, tt$track_type))
+pp <- st_sf(tid = tt$tornado_id, geometry = st_transform(st_geometry(tt), 5070))   # the SPC line, or the start point
 hit <- st_intersects(pp, prox)
 n_t <- sum(lengths(hit) > 0); pairs <- sum(lengths(hit))
 has_row <- pp$tid %in% tornado_exposure$tornado_id
-cat(sprintf("\n1996-2009 tornadoes (2000 vintage): %s; whose path reaches a proxy of a missing official ZCTA: %d (%.2f%%); proxy-ZCTA hits (tornado x missing ZCTA pairs): %d\n", format(nrow(pp), big.mark = ","), n_t, 100 * n_t / nrow(pp), pairs))
+cat(sprintf("\n1996-2009 tornadoes (2000 vintage): %s; whose SPC line or start point reaches a proxy of a missing official ZCTA: %d (%.2f%%); proxy-ZCTA hits (tornado x missing ZCTA pairs): %d\n", format(nrow(pp), big.mark = ","), n_t, 100 * n_t / nrow(pp), pairs))
 cat(sprintf("  of those %d, %d already have at least one ZCTA row (so only some of their pairs are lost) and %d have none (they are among the tornadoes that intersect no ZCTA: %d of %d in this vintage)\n", n_t, sum(lengths(hit) > 0 & has_row), sum(lengths(hit) > 0 & !has_row), sum(!has_row), nrow(pp)))
 src <- table(unlist(lapply(hit, function(h) prox$src[h]))); cat("hits by proxy type:", paste(names(src), src, collapse = "; "), "\n")
 only_poly <- sapply(hit, function(h) any(prox$src[h] %in% c("2010 polygon", "2020 polygon"))); cat("tornadoes reaching a proxy that is a 2010/2020 polygon (better located):", sum(only_poly), "\n")

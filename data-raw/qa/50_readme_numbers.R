@@ -3,11 +3,10 @@
 # Numbers that can be computed directly from the bundled data are computed in README.Rmd itself.
 suppressMessages({library(sf); library(dplyr)}); source("data-raw/qa/helpers.R")
 for (f in list.files("data", pattern = "\\.rda$", full.names = TRUE)) load(f)
-tt <- st_drop_geometry(tornado_tracks); d <- tornado_exposure; sm <- survey_matches; se <- survey_exposure
+tt <- st_drop_geometry(tornado_tracks); d <- tornado_exposure
+f <- "data-raw/readme/numbers.csv"; keep <- if (file.exists(f)) read.csv(f, stringsAsFactors = FALSE) else data.frame(name = character(), value = numeric(), source = character())
+keep <- keep[keep$source %in% c("46", "66"), ]    # written by data-raw/qa/46_path_accuracy.R and 66_modeled_vs_dat.R; run those after this script
 out <- list(); add <- function(name, value, source) out[[length(out) + 1]] <<- data.frame(name = name, value = value, source = source)
-# largest distance between the surveyed centerline and the modeled line (tornadoes with a usable swath, line tracks), data-raw/qa/46
-cal <- readRDS(qa_out("survey_path_accuracy.rds"))$calibration
-add("offset_n", nrow(cal), "46"); add("offset_median_km", median(cal$max_km), "46"); add("offset_p90_km", unname(quantile(cal$max_km, .9)), "46")
 # coordinate rounding simulation, data-raw/qa/02
 r <- readRDS(qa_out("coordinate_rounding_summary.rds"))
 add("round_before_2007_pct", r$`tornadoes_changed_%/rep`[1], "02"); add("round_from_2007_pct", r$`tornadoes_changed_%/rep`[2], "02")
@@ -20,18 +19,8 @@ add("overlap_codes_2010_2020", nrow(v$r1020), "29"); add("overlap_codes_2000_201
 z <- readRDS(qa_out("no_zcta_summary.rds"))
 add("noz_n", z$n, "47"); add("noz_pct", 100 * z$n / nrow(tt), "47")
 add("noz_water", z$cats[["over water"]], "47"); add("noz_nonear", z$cats[["over land, no ZCTA nearby"]], "47"); add("noz_mostly", z$cats[["on land, mostly covered"]], "47")
-# modeled / surveyed share of residents in the same ZCTA, tornadoes with a usable swath (population-share row of the agreement table), as in check_documented_claims.R
-inc <- sm$tornado_id[sm$status == "included"]
-J <- full_join(d[d$tornado_id %in% inc, c("tornado_id", "ZCTA", "pop_prop_affected")], se[, c("tornado_id", "ZCTA", "pop_prop_affected")], by = c("tornado_id", "ZCTA"), suffix = c("_m", "_s"))
-pb <- J[!is.na(J$pop_prop_affected_m) & !is.na(J$pop_prop_affected_s) & J$pop_prop_affected_m > 0 & J$pop_prop_affected_s > 0, ]; q <- pb$pop_prop_affected_m / pb$pop_prop_affected_s
-add("popratio_n", nrow(pb), "agreement table"); add("popratio_median", median(q), "agreement table"); add("popratio_p10", unname(quantile(q, .1)), "agreement table"); add("popratio_p90", unname(quantile(q, .9)), "agreement table")
 # first and second map_exposure() call, data-raw/qa/48
 m <- readRDS(qa_out("first_map_timing.rds"))
-add("map_zip_mb_2000", m$size_mb[["cb_2000"]], "48"); add("map_zip_mb_2020", m$size_mb[["cb_2020"]], "48")
+add("map_zip_mb_2000", m$size_mb[["full_2000"]], "48"); add("map_zip_mb_2010", m$size_mb[["full_2010"]], "48"); add("map_zip_mb_2020", m$size_mb[["full_2020"]], "48")
 add("map_first_s", m$first_s, "48"); add("map_second_s", m$second_s, "48"); add("map_zip_mb", m$zip_mb, "48"); add("map_disk_mb", m$downloaded_mb, "48")
-# operations on the source data, data-raw/qa/52
-au <- readRDS(qa_out("audit_counts.rds"))
-add("width_replaced_n", au$width_imputed, "52"); add("point_n", au$point_total, "52"); add("point_pct", 100 * au$point_total / nrow(tt), "52"); add("cap_rows_modeled", au$cap_modeled_rows_eq1, "52"); add("cap_rows_survey", au$cap_survey_rows_eq1, "52")
-add("spc_segment_rows_dropped", sum(au$sg_table_1996[c("2", "-9")]), "52"); add("spc_columns_dropped", length(au$cols_dropped), "52"); add("centroid_rows_rounded", au$centroid_rows, "52")
-add("dat_polygons_generalized", au$dat_polys, "52"); add("survey_tracks_simplified", au$survey_tracks_n, "52")
-res <- do.call(rbind, out); write.csv(res, "data-raw/readme/numbers.csv", row.names = FALSE); print(res, row.names = FALSE)
+res <- rbind(keep, do.call(rbind, out)); write.csv(res, f, row.names = FALSE); print(res, row.names = FALSE)

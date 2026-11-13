@@ -55,8 +55,8 @@ lg("segments in SPC: ", nrow(seg))
 # revisions: NCEI file dates against the SPC release of 24 April 2026
 R$file_dates <- nf[nf$kind == "details", c("year", "cdate")]; R$agree_by_file_date <- C %>% mutate(after = yr %in% nf$year[nf$kind == "details" & nf$cdate > "20260424"]) %>% group_by(after) %>% group_modify(~ agree(.x))
 old <- list.files(qa_cache("ncei"), pattern = "details", full.names = TRUE); R$old_cache_files <- basename(old)
-# narratives of surveyed tornadoes (paired with a usable swath in the published layer)
-load("data/survey_matches.rda"); inc <- survey_matches$tornado_id[survey_matches$status == "included"]; Nn <- N[N$tornado_id %in% inc, ]
+# narratives of surveyed tornadoes (tornadoes linked to a DAT line in tornado_dat_link)
+load("data/tornado_dat_link.rda"); inc <- unique(tornado_dat_link$tornado_id); Nn <- N[N$tornado_id %in% inc, ]
 R$narr <- data.frame(events = nrow(Nn), narrative_nonempty = mean(nzchar(Nn$EVENT_NARRATIVE)) * 100, mentions_coordinates = mean(grepl("[0-9]{2}\\.[0-9]{3,}\\s*,\\s*-?[0-9]{2,3}\\.[0-9]{3,}", Nn$EVENT_NARRATIVE)) * 100, mentions_miles = mean(grepl("[0-9.]+\\s*(-)?\\s*mile", Nn$EVENT_NARRATIVE, ignore.case = TRUE)) * 100,
   mentions_ef = mean(grepl("EF-?[0-5]", Nn$EVENT_NARRATIVE)) * 100, mentions_upgrade = mean(grepl("upgrad|updated|revised|re-surveyed|resurvey", Nn$EVENT_NARRATIVE, ignore.case = TRUE)) * 100, mentions_nws_survey = mean(grepl("survey", Nn$EVENT_NARRATIVE, ignore.case = TRUE)) * 100)
 R$st_louis_events <- N[N$YEAR == 2025 & as.Date(N$bt) == as.Date("2025-05-16") & N$BEGIN_LAT > 38.5 & N$BEGIN_LAT < 38.9 & N$BEGIN_LON > -90.5 & N$BEGIN_LON < -89.8, c("EVENT_ID", "STATE", "CZ_NAME", "BEGIN_TIME", "TOR_F_SCALE", "TOR_LENGTH", "TOR_WIDTH", "BEGIN_LAT", "BEGIN_LON", "END_LAT", "END_LON", "INJURIES_DIRECT", "DEATHS_DIRECT", "DAMAGE_PROPERTY", "tornado_id", "dist_km", "EVENT_NARRATIVE")]

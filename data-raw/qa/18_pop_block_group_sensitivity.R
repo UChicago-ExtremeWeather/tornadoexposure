@@ -8,10 +8,10 @@
 source("data-raw/qa/helpers.R"); source("data-raw/population/population_functions.R"); source("R/path_polygon.R")
 suppressMessages({library(dplyr); library(sf)})
 R <- readRDS(qa_out("population_results.rds"))
-blk <- R$pop_aff %>% filter(kind == "modeled", vint == 2020) %>% group_by(tid) %>% summarise(block_pop = sum(pop_aff), .groups = "drop")
+blk <- R$pop_aff %>% filter(vint == 2020) %>% group_by(tid) %>% summarise(block_pop = sum(pop_aff), .groups = "drop")
 load("data/tornado_tracks.rda")
-yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4)); tt <- tornado_tracks[yr >= 2020, ]
-poly <- .path_polygon(tt, tt$wid_yd, tt$len_mi, tt$track_type)
+yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4)); tt <- tornado_tracks[yr >= 2020 & !is.na(tornado_tracks$modeled_path_area_m2), ]
+poly <- .path_polygon(tt, tt$wid_yd)
 tg <- st_sf(tid = tt$tornado_id, geometry = poly); tg4 <- st_transform(tg, 4269)
 states <- pop_states(); out <- list()
 for (i in seq_len(nrow(states))) { st <- states[i, ]

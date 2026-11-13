@@ -4,7 +4,7 @@ suppressMessages({library(dplyr); library(sf); library(ggplot2)})
 options(width=140, tigris_use_cache=TRUE, timeout=600); sf_use_s2(FALSE)
 load("data/tornado_tracks.rda"); load("data/tornado_exposure.rda")
 raw <- read.csv(qa_spc_csv()) %>% mutate(tornado_id=paste(yr,om,sep="_"))
-no <- tornado_tracks[!tornado_tracks$tornado_id %in% tornado_exposure$tornado_id,] %>% left_join(raw %>% filter(sg==1) %>% distinct(tornado_id,.keep_all=TRUE) %>% select(tornado_id,yr,st,mag,len,wid,slat,slon,elat,elon), by="tornado_id")
+no <- tornado_tracks[!tornado_tracks$tornado_id %in% tornado_exposure$tornado_id,] %>% left_join(raw %>% filter(sg==1) %>% distinct(tornado_id,.keep_all=TRUE) %>% select(tornado_id,yr,st,mag), by="tornado_id"); no$len <- no$len_mi; no$wid <- no$wid_yd
 cat("no-ZCTA tornadoes:", nrow(no), " by type:"); print(table(no$track_type)); cat("by magnitude:"); print(table(no$mag)); cat("by decade vintage:"); print(table(cut(no$yr,c(1995,2009,2019,2025),labels=c("2000v","2010v","2020v"))))
 st <- tigris::states(cb=TRUE, year=2020, progress_bar=FALSE) %>% st_transform(5070) %>% st_make_valid()
 vint <- function(y) ifelse(y<2010,2000,ifelse(y<2020,2010,2020))

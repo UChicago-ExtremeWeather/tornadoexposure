@@ -41,7 +41,7 @@ cat(sprintf("\nzcta_centroids: %d rows (%s), %d columns; xz .rda size %.0f KB\n"
 saveRDS(tab, qa_out("zcta_centroids_plan_full.rds"))
 # ---- query runtime and relation to the overlap set -------------------------
 yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4)); vint <- ifelse(yr < 2010, 2000L, ifelse(yr < 2020, 2010L, 2020L))
-poly <- .path_polygon(tornado_tracks, tornado_tracks$wid_yd, tornado_tracks$len_mi, tornado_tracks$track_type)
+poly <- sf::st_transform(sf::st_geometry(tornado_tracks), 5070)   # the SPC line, or the start point: distances are measured from it
 pts <- lapply(c("2000", "2010", "2020"), function(v) { c1 <- out[[v]]; sf::st_sf(ZCTA = c1$ZCTA, geometry = sf::st_geometry(pt5070(c1$lon, c1$lat))) }); names(pts) <- c("2000", "2010", "2020")
 ex <- tornado_exposure %>% mutate(vint = ifelse(year < 2010, 2000L, ifelse(year < 2020, 2010L, 2020L)))
 run <- function(R) {
