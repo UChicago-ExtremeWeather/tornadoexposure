@@ -6,9 +6,25 @@
 #   2010 and 2000: TIGER/Line tabulation blocks plus the Census PL 94-171
 #                  redistricting files (total population by block)
 # Downloads are cached outside the repository.
+#
+# Stop conditions (nothing is capped, imputed or dropped without the maintainer's approval): a block with an NA population, a duplicated
+# GEOID in a block file, and a share of a block inside a path that is above 1 by more than floating-point error (1e-9).
 
 suppressMessages({library(sf); library(dplyr)})
 sf_use_s2(FALSE)
+frac_tolerance <- 1e-9   # floating-point tolerance for a block share above 1
+
+# counts of the shares computed so far in this session (path-block pieces, pieces above 1 within the tolerance, largest share), for the documentation
+pop_frac_stats <- new.env(); pop_frac_stats$pieces <- 0; pop_frac_stats$above1 <- 0; pop_frac_stats$max <- 0
+
+# share of each block's area inside the path, with the stop conditions above
+block_shares <- function(x, where) {
+  if (anyNA(x$pop)) stop("Block population is NA for ", length(unique(x$GEOID[is.na(x$pop)])), " blocks in ", where, ". NA stays NA and the build stops.", call. = FALSE)
+  frac <- x$a_in / x$a_blk
+  if (any(frac > 1 + frac_tolerance)) stop(sum(frac > 1 + frac_tolerance), " path pieces cover more than 1 + ", frac_tolerance, " of a block in ", where, " (largest ", max(frac), "). No cap is applied; inspect the data.", call. = FALSE)
+  pop_frac_stats$pieces <- pop_frac_stats$pieces + length(frac); pop_frac_stats$above1 <- pop_frac_stats$above1 + sum(frac > 1); pop_frac_stats$max <- max(pop_frac_stats$max, frac)
+  frac
+}
 options(tigris_use_cache = TRUE)
 
 pop_cache <- function(...) {
@@ -137,6 +153,7 @@ zcta_layer <- function(vintage) {
 #            allocated by the share of each block's area inside the polygon
 process_state <- function(vintage, st, targets, zl) {
   b <- read_blocks(vintage, st$state_code, st$dir_name, st$abb)
+  if (anyDuplicated(b$GEOID)) stop(sum(duplicated(b$GEOID)), " duplicated block GEOIDs in ", vintage, " ", st$state, ".", call. = FALSE)
   st_total_pl <- attr(b, "state_total")
   n_blocks <- nrow(b)
   # assign every block to a ZCTA through its internal point
@@ -166,13 +183,13 @@ process_state <- function(vintage, st, targets, zl) {
       bc <- sf::st_make_valid(sf::st_transform(b[cand, ], 5070))
       bc$a_blk <- as.numeric(sf::st_area(bc))
       bc$bid <- seq_len(nrow(bc))
-      x <- suppressWarnings(sf::st_intersection(tg[, c("tid", "kind")], bc[, c("bid", "pop", "ZCTA", "a_blk")]))
+      x <- suppressWarnings(sf::st_intersection(tg[, c("tid", "kind")], bc[, c("GEOID", "bid", "pop", "ZCTA", "a_blk")]))
       if (nrow(x)) {
         x <- sf::st_collection_extract(x, "POLYGON")
         x$a_in <- as.numeric(sf::st_area(x))
         x <- sf::st_drop_geometry(x)
-        x$frac <- pmin(x$a_in / x$a_blk, 1)
-        x$pop_aff <- ifelse(is.na(x$pop), 0, x$pop) * x$frac
+        x$frac <- block_shares(x, paste(vintage, st$state))
+        x$pop_aff <- x$pop * x$frac
         pop_aff <- x %>% group_by(tid, kind, ZCTA) %>% summarise(pop_aff = sum(pop_aff), n_blocks = n(), .groups = "drop")
       }
     }
@@ -203,6 +220,8 @@ pop_aff_cached <- function(vintage, targets, states, zl, all_blocks = FALSE) {  
       next
     }
     bl <- readRDS(wf)$blocks
+    if (anyNA(bl$pop)) stop("Block population is NA for ", sum(is.na(bl$pop)), " blocks in ", vintage, " ", st$state, ". NA stays NA and the build stops.", call. = FALSE)
+    if (anyDuplicated(bl$GEOID)) stop(sum(duplicated(bl$GEOID)), " duplicated block GEOIDs in ", vintage, " ", st$state, ".", call. = FALSE)
     zip <- download_cached(block_url(vintage, fp), record = FALSE)
     td <- tempfile("blk"); dir.create(td); utils::unzip(zip, exdir = td)
     shp <- list.files(td, pattern = "\\.shp$", full.names = TRUE)
@@ -210,6 +229,7 @@ pop_aff_cached <- function(vintage, targets, states, zl, all_blocks = FALSE) {  
     b <- sf::read_sf(shp, wkt_filter = wkt); unlink(td, recursive = TRUE)
     gcol <- if (vintage == 2000) "BLKIDFP00" else paste0("GEOID", substr(vintage, 3, 4))
     b$GEOID <- b[[gcol]]; b <- b[, "GEOID"]
+    if (anyDuplicated(b$GEOID)) stop(sum(duplicated(b$GEOID)), " duplicated block GEOIDs in the ", vintage, " ", st$state, " block file.", call. = FALSE)
     b$pop <- bl$pop[match(b$GEOID, bl$GEOID)]; b$ZCTA <- bl$ZCTA[match(b$GEOID, bl$GEOID)]
     # candidate blocks: near the paths, buffered by 5 km (see process_state()) so that no touched block is missed
     near_paths <- sf::st_transform(sf::st_union(sf::st_buffer(sf::st_geometry(tg), 5000)), 4269)
@@ -219,7 +239,7 @@ pop_aff_cached <- function(vintage, targets, states, zl, all_blocks = FALSE) {  
     x <- suppressWarnings(sf::st_intersection(tg[, c("tid", "kind")], bc[, c("GEOID", "pop", "ZCTA", "a_blk")]))
     if (!nrow(x)) next
     x <- sf::st_collection_extract(x, "POLYGON"); x$a_in <- as.numeric(sf::st_area(x)); x <- sf::st_drop_geometry(x)
-    x$pop_aff <- ifelse(is.na(x$pop), 0, x$pop) * pmin(x$a_in / x$a_blk, 1)
+    x$pop_aff <- x$pop * block_shares(x, paste(vintage, st$state))
     # sum in a fixed order (path, ZCTA, block, piece area), so the result does not depend on which other paths were processed together
     x <- x[order(x$tid, x$ZCTA, x$GEOID, x$a_in), ]
     out[[length(out) + 1]] <- x %>% group_by(tid, ZCTA) %>% summarise(pop_aff = sum(pop_aff), .groups = "drop")
