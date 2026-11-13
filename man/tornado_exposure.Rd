@@ -5,8 +5,8 @@
 \alias{tornado_exposure}
 \title{Tornado exposure by ZCTA}
 \format{
-A data frame with 58,162
-rows and 17 variables:
+A data frame with 57,754
+rows and 22 variables:
 \describe{
 \item{tornado_id}{Tornado identifier made from the SPC year and \code{om}
 columns (for example \code{"2011_1105221634-01"}: the year, then SPC's record
@@ -27,31 +27,30 @@ total, repeated on every row of the tornado).}
 \item{property_loss_tornado_total}{SPC property loss for the whole tornado
 in nominal dollars, repeated on every row of the tornado; \code{NA} when SPC
 recorded 0 or no value (see Property loss).}
-\item{property_loss_allocated}{\code{property_loss_tornado_total} times
-\code{area_share_of_tornado} (area-weighted approximation); \code{NA} when the
-tornado total is \code{NA}.}
+\item{track_type}{\code{"line"} or \code{"point"} (see \link{tornado_tracks}).}
 \item{ZCTA}{Five-character ZCTA code as a string, with leading zeros.}
-\item{area_prop_affected}{Area of the path inside the ZCTA divided by the
-ZCTA's land area (\code{ALAND}), as a proportion from 0 to 1. Capped at 1
-because \code{ALAND} excludes water while the ZCTA polygon includes it.
-Larger than the damage swath if \code{wid} is the maximum width (see Width
-and straight-line limitations). Used by \code{area_thresh}.}
-\item{pop_affected}{Estimated residents inside the path within the ZCTA
+\item{boundary_dist_km}{Distance in kilometers from the SPC line (or start point) to the ZCTA boundary; 0 when the line touches the ZCTA.}
+\item{centroid_dist_km}{Distance in kilometers from the SPC line (or start point) to the population-weighted centroid of the ZCTA.}
+\item{modeled_intersection_m2}{Area of the modeled path inside the ZCTA, in square meters (EPSG:5070). \code{NA} when no path shape is modeled.}
+\item{modeled_area_prop}{\code{modeled_intersection_m2 / zcta_polygon_area_m2}, not capped. Used by \code{area_thresh}.}
+\item{modeled_pop_affected}{Estimated residents inside the modeled path within the ZCTA
 (a count, not rounded), from block populations allocated by the share of each
-block's area inside the path. \code{get_data()} and \code{get_survey_data()} return it
-in every call. The \code{pop_thresh} argument applies to the share
-(\code{pop_prop_affected}) only; to filter on the count, subset the result, for
-example \code{subset(x, pop_affected >= n)} with \code{n} a number of residents of your choice.}
+block's area inside the path. The \code{pop_thresh} argument applies to the share
+(\code{modeled_pop_prop}) only; to filter on the count, subset the result, for
+example \code{subset(x, modeled_pop_affected >= n)} with \code{n} a number of residents of your choice.}
+\item{modeled_pop_prop}{\code{modeled_pop_affected / zcta_pop}, not capped; \code{NA} when
+\code{zcta_pop} is 0. Used by \code{pop_thresh}.}
+\item{modeled_area_share_of_tornado}{Modeled area inside the ZCTA divided by
+the sum of that tornado's modeled areas across all ZCTAs it crossed. Shares sum
+to 1 over a tornado's rows. This is a different denominator from
+\code{modeled_area_prop}.}
+\item{modeled_property_loss_allocated}{\code{property_loss_tornado_total} times
+\code{modeled_area_share_of_tornado} (area-weighted approximation); \code{NA} when the
+tornado total or the modeled path is \code{NA}.}
+\item{zcta_polygon_area_m2}{Area of the full TIGER/Line ZCTA polygon of the boundary year, in square meters (EPSG:5070).}
+\item{zcta_land_area_m2}{Census land area (\code{ALAND}) of the ZCTA in the boundary year, in square meters.}
 \item{zcta_pop}{Total population of the ZCTA in the boundary year used for the
 tornado's year (sum of its blocks' populations).}
-\item{pop_prop_affected}{\code{pop_affected / zcta_pop}, from 0 to 1; \code{NA} when
-\code{zcta_pop} is 0. Used by \code{pop_thresh}.}
-\item{area_share_of_tornado}{Area of the path inside the ZCTA divided by
-the sum of that tornado's areas across all ZCTAs it crossed. Shares sum
-to 1 over a tornado's rows. This is a different denominator from
-\code{area_prop_affected}.}
-\item{track_type}{\code{"line"}, \code{"point_equal_area"} (point track with a
-reported length) or \code{"point_half_width"} (point track with length 0).}
 }
 }
 \source{
@@ -59,7 +58,7 @@ NOAA Storm Prediction Center severe weather database
 (\url{https://www.spc.noaa.gov/wcm/data/1950-2025_all_tornadoes.csv})
 and Census Bureau ZCTA boundaries (2000, 2010 and 2020 boundary years) via tigris.
 Built by \code{data-raw/process_tracks.R} (full rebuild) and extended year by year by
-\code{data-raw/update_data.R}.
+\code{data-raw/update_data.R}; the population columns by \code{data-raw/add_population.R}.
 }
 \usage{
 tornado_exposure
@@ -67,81 +66,57 @@ tornado_exposure
 \description{
 One row per tornado and ZCTA for every tornado in the United States from
 1996 to 2025:
-58,162 rows covering
-37,439
-tornadoes. A tornado appears once for each ZCTA its path polygon overlaps.
-A ZCTA (ZIP Code Tabulation Area) is the Census Bureau's approximation of a ZIP code
-area. A path polygon is the straight line between SPC's start and end points
-widened to SPC's width, or a disc for a tornado with no usable end point.
-All ratings are included, EF0 to EF5 and unknown (see \code{magnitude}).
+57,754 rows covering
+37,383
+tornadoes. A ZCTA (ZIP Code Tabulation Area) is the Census Bureau's approximation of a ZIP code
+area. A tornado appears once for each ZCTA it touched:
+\itemize{
+\item a line track with a positive width touches the ZCTAs that its modeled path polygon overlaps (the straight line between SPC's
+start and end points, widened to SPC's width);
+\item a line track with a width of 0 or missing has no polygon; it touches the ZCTAs that a positive length of the line lies in;
+\item a tornado with no usable end point is a point at its start (see \link{tornado_tracks}); it touches the ZCTA that contains the start point,
+and has no row when the start point lies in no ZCTA.
+}
 }
 \details{
-\strong{Path polygons.} Each tornado's path is a polygon built from the SPC track
-and width (see \code{.path_polygon()} in the package source): a line track is
-buffered by half the width with flat end caps. A tornado with an unknown or
-zero-length track is a point track; because the direction is unknown, its
-polygon is a disc centered on the start point (area equal to length times
-width when the length is above 0, otherwise radius equal to half the width).
-All areas are computed in an equal-area CRS (EPSG:5070). A point track has
-\code{track_type = "point_equal_area"} (SPC gave a length, so the disc has an area
-equal to length times width) or \code{"point_half_width"} (the length is 0, so the
-disc has a radius of half the width). Only the start point is known and the
-extent of the disc is a stand-in, because the direction is unknown. Point
-tracks are 27.3\% of all tornadoes
-(10,265 with \code{"point_equal_area"} and
-119 with \code{"point_half_width"});
-excluding \code{track_type != "line"} shows how much they matter. A disc is not a
-measurement: the published data draw these tornadoes as discs, and the next
-version places them at their start point and models no shape (the real path may
-extend up to the reported length from the start in an unknown direction;
-\code{data-raw/known_issues.md}, section Tornadoes with no usable end point).
+All ratings are included, EF0 to EF5 and unknown (see \code{magnitude}).
 
-\strong{Width and straight-line limitations.} SPC gives one width in yards for each
-tornado. NWS instructions for Storm Data define the path width entered for a
-tornado as the maximum width over the entire path (or of each segment), SPC
-compiles its database from Storm Data, and this package treats \code{wid} as that
-maximum width (\code{data-raw/known_issues.md}, section Path accuracy, gives the
-source and two checks that agree). The width is applied along the whole track,
-so, treating \code{wid} as the maximum, every area and proportion derived from a
-path is larger than that of the damage swath, most for long tracks whose
-width varied. For example, the Joplin tornado
-(\verb{2011_1105221634-01}) is modeled with a width of
-1600
-yards across
-21.62
-miles, and the Mayfield tornado (\verb{2021_2112102054-01}) with
-2600
-yards across
-168.53
-miles gives a path area of
-627
-square kilometers. Halving the average width would halve the proportions. For
-the 2,941 tornadoes whose damage swath was surveyed (see \link{survey_matches}), the
-modeled path area has a median of
-1.21
-times the surveyed swath area.
-SPC gives only a start and an end point, so each path is drawn as a straight
-line even though real tornadoes curve; the modeled path can sit away from
-the surveyed damage path (see the Path accuracy section of \code{data-raw/known_issues.md} in the repository for
-comparisons with NWS surveys).
+\strong{Modeled columns.} The columns that begin with \code{modeled_} come from the modeled path polygon: a straight line at SPC's single
+width. NWS instructions for Storm Data define the path width entered for a tornado as the maximum width over the entire path (or
+of each segment), SPC compiles its database from Storm Data, and this package treats \code{wid} as that maximum width
+(\code{data-raw/known_issues.md}, section Path accuracy, gives the source and two checks that agree). The width is applied along the whole track, so
+every modeled area and proportion is larger than that of the damage swath, most for long tracks whose width varied: for the
+tornadoes whose NWS damage polygons touch the linked survey line, the modeled path area is a median of
+1.18 times the area of the NWS damage polygons
+(10th to 90th percentile 0.41 to 2.03), the modeled area share of a ZCTA is
+1.21 times the share computed from the NWS polygons (0.37 to 2.99) and
+the modeled resident share 1.16 times (0.29 to 3.60). They are noisy for any single
+tornado and are approximations, not a damage boundary. SPC gives only a start and an end point, so each path is a straight
+line even though real tornadoes curve (section Path accuracy of \code{data-raw/known_issues.md}). The modeled columns are \code{NA} for the
+tornadoes with no modeled path shape (\code{track_type = "point"}, and lines with \code{wid_yd} of 0).
 
 \strong{Census boundary year.} The Census Bureau publishes ZCTA boundaries
 for the 2000, 2010 and 2020 censuses; each set of boundaries is called a Census boundary year here.
-Tornadoes are intersected with the boundaries that match
+Tornadoes are intersected with the full TIGER/Line boundaries that match
 their year: the 2000 file for years before 2010, the 2010 file for 2010 to
 2019, and the 2020 file from 2020. The same ZCTA code can cover a different
 area in different boundary years, and the 2000 polygons omit large water bodies
 that the 2010 and 2020 polygons include (\code{data-raw/known_issues.md} gives the
 counts).
 
-\strong{Exposure.} A ZCTA is exposed to a tornado when the path overlaps it
+\strong{Exposure.} A ZCTA is exposed to a tornado when the tornado touched it
 (any overlap, including very small touches). Thresholds on
-\code{area_prop_affected} or \code{pop_prop_affected} are applied to each tornado
+\code{modeled_area_prop} or \code{modeled_pop_prop} are applied to each tornado
 separately, not cumulatively across tornadoes. Area share depends on the size of
 the ZCTA as well as on how the path crossed it; population share follows where
 residents live.
 
-\strong{Population.} \code{pop_affected} estimates the residents inside the path within
+\strong{Area.} \code{modeled_area_prop} is the modeled intersection divided by the area of the full ZCTA
+polygon (\code{zcta_polygon_area_m2}), with the same geometry in numerator and denominator. It is not capped. The Census land area
+(\code{ALAND}, \code{zcta_land_area_m2}) is returned too: the ZCTA polygon includes inland and coastal water that \code{ALAND} excludes, so the
+polygon is larger than the land area for ZCTAs with water.
+
+\strong{Population.} \code{modeled_pop_affected} estimates the residents inside the modeled path within
 the ZCTA. It uses block-level total population (all ages, no age weights)
 from the census of the ZCTA
 boundary year: 2000 blocks for years before 2010, 2010 blocks for 2010 to 2019 and
@@ -151,34 +126,36 @@ block's area inside the path (uniform density within a block; block polygons
 include any water in the block), and blocks are assigned to ZCTAs by their
 internal points (ZCTAs are built from whole blocks). \code{zcta_pop} is the sum of the
 populations of the blocks assigned to the ZCTA and is the denominator of
-\code{pop_prop_affected}, which is \code{NA} for the
-23 rows where
-\code{zcta_pop} is 0. Because \code{zcta_pop} is the weight, the sum of \code{pop_affected}
-divided by the sum of \code{zcta_pop} over any set of ZCTAs equals the
-\code{zcta_pop}-weighted average of \code{pop_prop_affected}, and summing \code{pop_affected}
-across tornadoes counts a resident once for each tornado that hit them. Two
-paths that cover the same share of a ZCTA's land can have very different
-\code{pop_prop_affected}: a path through a dense town holds many residents, while one
+\code{modeled_pop_prop}, which is \code{NA} for the
+23 modeled rows where
+\code{zcta_pop} is 0. Two paths that cover the same share of a ZCTA's area can have very different
+\code{modeled_pop_prop}: a path through a dense town holds many residents, while one
 over farmland of the same area holds few. Limitations: the path is the
-straight-line path with one width applied along the whole track (see the Path accuracy section of \code{data-raw/known_issues.md} in the repository),
-and 2020 block counts have disclosure-avoidance noise added by the Census Bureau,
-which is larger for small areas.
+straight-line path with one width applied along the whole track, and 2020 block counts have disclosure-avoidance noise added by
+the Census Bureau, which is larger for small areas.
+
+\strong{Distances.} \code{boundary_dist_km} is the distance from the SPC line (the start point for a point tornado) to the
+ZCTA boundary of the boundary year: 0 when the line touches the ZCTA. Every row of this dataset is a ZCTA that the modeled path or
+the line touched, so the value is 0 except where the polygon, but not the line, reaches the ZCTA
+(0 rows). \code{centroid_dist_km} is the distance from the same line or
+point to the population-weighted centroid of the ZCTA (\link{zcta_centroids}). Both are in kilometers. For ZCTAs a tornado did not touch use
+\code{get_data(centroid_dist_km = ...)} or \code{get_data(boundary_dist_km = ...)}.
 
 \strong{Tornadoes without a ZCTA.}
-588
-tornadoes intersect no ZCTA of their boundary year (paths over water, and areas
+644
+tornadoes touch no ZCTA of their boundary year (paths over water, and areas
 that the Census does not assign to a ZCTA; \code{data-raw/known_issues.md} gives
 the counts). They are in \link{tornado_tracks}
 but not in this dataset, and their property loss is not allocated.
 
 \strong{Property loss.} \code{property_loss_tornado_total} is the SPC \code{loss} for the
 whole tornado in nominal dollars (repeated on every row of the tornado; do
-not sum it across rows), and \code{property_loss_allocated} splits it across the
-ZCTAs in proportion to \code{area_share_of_tornado}, so a tornado's allocated
+not sum it across rows), and \code{modeled_property_loss_allocated} splits it across the
+ZCTAs in proportion to \code{modeled_area_share_of_tornado}, so a tornado's allocated
 values sum to its total. It is an estimate, not a measurement: it assumes
 the damage is spread evenly over the area of the path, so a tornado that
 crosses a sparsely settled ZCTA for most of its length but hits a dense one
-briefly has most of its loss assigned to the sparse ZCTA. Both are \code{NA} when SPC recorded 0 or
+briefly has most of its loss assigned to the sparse ZCTA. The total is \code{NA} when SPC recorded 0 or
 no value, which NOAA says does not mean $0. SPC loss is incomplete even for
 the deadliest tornadoes: the Mayfield, Kentucky tornado of December 2021
 (57
@@ -187,31 +164,30 @@ deaths) has a loss of
 dollars, and 28
 of the 108
 EF4 and EF5 tornadoes since 2007 have no loss recorded. SPC reports loss in
-millions of dollars through 2006 (converted here); the raw value and its unit
+millions of dollars through 2006 (converted here without rounding beyond floating-point error); the raw value and its unit
 are in \link{tornado_tracks} (\code{loss_raw}, \code{loss_raw_unit}).
 
 \strong{Injuries and fatalities} are tornado-level totals attributed to every ZCTA
 the tornado touched (they are not allocated), so do not sum them across the
 rows of one tornado.
 
-\strong{Coordinate rounding.} Coordinates for 1996 to 2006 are rounded to 0.01
+\strong{Coordinate rounding.} Coordinates for 1996 to 2006 are given by SPC to 0.01
 degrees, which is about 1.1 km of latitude, so a coordinate can be off by up
-to 0.005 degrees (about 0.55 km). Coordinates from 2007 onward are rounded to
+to 0.005 degrees (about 0.55 km). Coordinates from 2007 onward are given to
 0.0001 degrees (about 11 m). Paths of short tornadoes, and their ZCTA
 membership near ZCTA boundaries, are therefore less certain before 2007: in a
 simulation that moves each coordinate by up to half its rounding step,
 \code{data-raw/known_issues.md} (section Coordinates) gives the share of tornadoes
 whose set of ZCTAs changes in each period. A sensitivity analysis restricted
 to 2007 onward is recommended. No column flags the coarse coordinates; filter
-on \code{year}.
+on \code{year}. The package does not round, snap or move any coordinate.
 
 \strong{Identifiers.} \code{tornado_id} is unique within a package version but is not
 stable across SPC releases for 2007 onward: SPC changed its \code{om} numbering
 between its 2024 and 2025 releases and also revises coordinates. To link
 records across package versions, join on \code{ZCTA} and \code{date}.
 }
-\references{
-NOAA Storm Prediction Center. Severe Weather Database.
-\url{https://www.spc.noaa.gov/wcm/} (accessed 2026-10-12).
+\seealso{
+\link{tornado_tracks}, \link{spc_records}, \code{\link[=get_data]{get_data()}}
 }
 \keyword{datasets}

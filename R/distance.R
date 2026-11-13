@@ -1,7 +1,11 @@
-# Distance exposure: a ZCTA is exposed when the population-weighted centroid of
-# the ZCTA lies within `centroid_dist_km` of the tornado path polygon. Nothing is
-# precomputed: distances are computed on demand from the stored tracks and the
-# small zcta_centroids table.
+# Distance exposure, measured from the SPC line (or from the start point of a tornado
+# with no usable end point):
+#   centroid_dist_km  the population-weighted centroid of the ZCTA lies within this distance
+#   boundary_dist_km  the ZCTA's boundary (full TIGER/Line polygon) lies within this distance
+#                     (0 when the line touches the ZCTA)
+# Nothing beyond the rows of tornado_exposure is precomputed: distances are computed on
+# demand from the stored tracks, the small zcta_centroids table and, for the boundary
+# distance, the full TIGER/Line ZCTA file.
 
 .centroids <- function() tornadoexposure::zcta_centroids
 
@@ -31,33 +35,63 @@
     sf::st_as_sf(cen, coords = c("lon", "lat"), crs = 4269), crs))
 }
 
-# Pairs (path polygon, centroid) with the centroid within `radius_km` of the
-# polygon. `region` and `vint` give the region and ZCTA vintage of each path,
-# `cen` is the (already filtered) centroid table, and `make_poly(i, crs)` returns
-# the path polygons of paths `i` in `crs`. Returns a data frame with `i` (index of
-# the path), `j` (centroid row) and `dist_km`. The spatial index is used through
-# a slightly oversized buffer; exact distances are then computed for the
-# candidate pairs only (sf::st_is_within_distance has no index and is far too
-# slow for a nationwide call).
-.distance_pairs <- function(region, vint, cen, radius_km, make_poly) {
+# Distance in km from each track (an sfc of LINESTRING or POINT in EPSG:4326, one per
+# element) to the point (lon, lat) of the same index (NAD83), element by element.
+.track_centroid_dist <- function(geom, lon, lat) {
+  region <- .distance_region(geom)
+  d <- numeric(length(geom))
+  for (rg in unique(region)) {
+    i <- which(region == rg)
+    crs <- .distance_crs[[rg]]
+    d[i] <- as.numeric(sf::st_distance(
+      sf::st_transform(sf::st_geometry(geom)[i], crs),
+      .centroid_points(data.frame(lon = lon[i], lat = lat[i]), crs),
+      by_element = TRUE)) / 1000
+  }
+  d
+}
+
+# Distance in km from each track to the ZCTA polygon of the same index (sfc in any CRS),
+# element by element; 0 when they touch.
+.track_zcta_dist <- function(geom, zpoly) {
+  region <- .distance_region(geom)
+  d <- numeric(length(geom))
+  for (rg in unique(region)) {
+    i <- which(region == rg)
+    crs <- .distance_crs[[rg]]
+    d[i] <- as.numeric(sf::st_distance(
+      sf::st_transform(sf::st_geometry(geom)[i], crs),
+      sf::st_transform(sf::st_geometry(zpoly)[i], crs), by_element = TRUE)) / 1000
+  }
+  d
+}
+
+# Pairs (track, target) with the target within `radius_km` of the track. `region` and
+# `vint` give the region and ZCTA vintage of each track, `targets` is an sf (centroid
+# points as a table with lon and lat, or ZCTA polygons) with a `vintage` column,
+# `make_geom(i, crs)` returns the geometries of tracks `i` in `crs` and
+# `make_target(j, crs)` those of targets `j`. Returns a data frame with `i` (index of
+# the track), `j` (target row) and `dist_km`. The spatial index is used through a
+# slightly oversized buffer; exact distances are then computed for the candidate
+# pairs only (sf::st_is_within_distance has no index and is far too slow for a
+# nationwide call).
+.distance_pairs <- function(region, vint, vintage, radius_km, make_geom, make_target) {
   out <- list()
   for (rg in unique(region)) for (vv in sort(unique(vint))) {
     i <- which(region == rg & vint == vv)
-    jrows <- which(cen$vintage == vv)
+    jrows <- which(vintage == vv)
     if (length(i) == 0L || length(jrows) == 0L) next
     crs <- .distance_crs[[rg]]
-    poly <- make_poly(i, crs)
-    pts <- .centroid_points(cen[jrows, , drop = FALSE], crs)
-    cand <- sf::st_intersects(sf::st_buffer(poly, radius_km * 1000 * 1.05),
-                              pts, sparse = TRUE)
+    g <- make_geom(i, crs)
+    tg <- make_target(jrows, crs)
+    cand <- sf::st_intersects(sf::st_buffer(g, radius_km * 1000 * 1.05), tg, sparse = TRUE)
     n <- lengths(cand)
     ii <- rep(seq_along(i), n)
     jj <- unlist(cand)
     if (length(jj) == 0L) next
-    d <- as.numeric(sf::st_distance(poly[ii], pts[jj], by_element = TRUE)) / 1000
+    d <- as.numeric(sf::st_distance(g[ii], tg[jj], by_element = TRUE)) / 1000
     keep <- d <= radius_km
-    out[[length(out) + 1L]] <- data.frame(i = i[ii[keep]], j = jrows[jj[keep]],
-                                          dist_km = d[keep])
+    out[[length(out) + 1L]] <- data.frame(i = i[ii[keep]], j = jrows[jj[keep]], dist_km = d[keep])
   }
   if (length(out) == 0L) {
     return(data.frame(i = integer(0), j = integer(0), dist_km = numeric(0)))
@@ -71,13 +105,13 @@
   stats::setNames(n, c("2000", "2010", "2020"))
 }
 
-# Rough time for a distance call. The measured times of the nationwide 1996-2025
+# Rough time for a centroid distance call. The measured times of the nationwide 1996-2025
 # query (every tornado, about 33,000 ZCTAs per vintage, one core) at radii of 1,
 # 5, 10, 25 and 50 km are in the table of data-raw/known_issues.md (written by
 # data-raw/qa/23_distance_tables.R); the estimate interpolates between them on
 # log scales (and extends the last segment beyond 50 km), and scales with the
 # number of (track, ZCTA) combinations in the request. Only a rough guide.
-.distance_timings <- data.frame(radius_km = c(1, 5, 10, 25, 50), seconds = c(9, 17, 32, 119, 362))
+.distance_timings <- data.frame(radius_km = c(1, 5, 10, 25, 50), seconds = c(5, 12, 28, 111, 343))
 .distance_seconds <- function(radius_km, n_tracks_by_vint, n_zcta_by_vint) {
   v <- names(n_tracks_by_vint)
   full_tracks <- .vint_counts(.vintage_of(as.integer(substr(.tracks()$tornado_id, 1, 4))))
@@ -104,92 +138,146 @@
 }
 
 .exposure_columns <- function() names(.exposure())
-.distance_columns <- c("dist_km", "centroid_type", "centroid_in_zcta")
+.modeled_columns <- c("modeled_intersection_m2", "modeled_area_prop", "modeled_pop_affected",
+                      "modeled_pop_prop", "modeled_area_share_of_tornado", "modeled_property_loss_allocated")
 
 # Assemble the output rows of a distance call.
-#   pairs    data frame with tornado_id, ZCTA, vintage, dist_km
+#   pairs    data frame with tornado_id, ZCTA, vintage and the distance columns that were measured
 #   attrs    one row per tornado: tornado_id, date, magnitude, total_injury,
-#            total_fatality, property_loss_tornado_total, track_type
-#   overlap  stored overlap rows (tornado_exposure-like) with the area and
-#            population columns for pairs where the path overlaps the ZCTA
+#            total_fatality, property_loss_tornado_total, track_type, has_shape
+#   overlap  stored overlap rows (tornado_exposure) with the modeled columns for pairs where
+#            the modeled path overlaps the ZCTA
 #   cen      the centroid table
-# Pairs where the path does not overlap the ZCTA get 0 for the area and
-# population columns.
+# Pairs with no stored row (the modeled path does not overlap the ZCTA) get 0 for the modeled
+# columns when the tornado has a modeled path polygon and NA when it has none.
 .assemble_distance <- function(pairs, attrs, overlap, cen) {
-  ov_cols <- c("area_prop_affected", "pop_affected", "pop_prop_affected",
-               "area_share_of_tornado", "property_loss_allocated")
   out <- merge(pairs, attrs, by = "tornado_id", all.x = TRUE, sort = FALSE)
-  out <- merge(out, cen[, c("ZCTA", "vintage", "zcta_pop", "centroid_type", "centroid_in_zcta")],
-               by = c("ZCTA", "vintage"), all.x = TRUE, sort = FALSE)
-  out <- merge(out, overlap[, c("tornado_id", "ZCTA", ov_cols)],
-               by = c("tornado_id", "ZCTA"), all.x = TRUE, sort = FALSE)
-  none <- is.na(out$area_prop_affected)   # no overlap row: the path misses the ZCTA
-  out$area_prop_affected[none] <- 0
-  out$area_share_of_tornado[none] <- 0
-  out$property_loss_allocated[none] <- ifelse(is.na(out$property_loss_tornado_total[none]), NA_real_, 0)
-  out$pop_affected[none] <- 0
-  out$pop_prop_affected[none] <- ifelse(out$zcta_pop[none] > 0, 0, NA_real_)
-  out$year <- as.integer(format(out$date, "%Y"))
-  out$month <- as.integer(format(out$date, "%m"))
-  out$day <- as.integer(format(out$date, "%d"))
+  out <- merge(out, cen[, c("ZCTA", "vintage", "zcta_pop", "zcta_polygon_area_m2", "zcta_land_area_m2")], by = c("ZCTA", "vintage"), all.x = TRUE, sort = FALSE)
+  ov <- overlap[, c("tornado_id", "ZCTA", .modeled_columns)]
+  out <- merge(out, ov, by = c("tornado_id", "ZCTA"), all.x = TRUE, sort = FALSE)
+  none <- is.na(out$modeled_intersection_m2) & out$has_shape
+  out$modeled_intersection_m2[none] <- 0
+  out$modeled_area_prop[none] <- 0
+  out$modeled_area_share_of_tornado[none] <- 0
+  out$modeled_property_loss_allocated[none] <- ifelse(is.na(out$property_loss_tornado_total[none]), NA_real_, 0)
+  out$modeled_pop_affected[none] <- 0
+  out$modeled_pop_prop[none] <- ifelse(out$zcta_pop[none] > 0, 0, NA_real_)
+  out$year <- as.numeric(format(out$date, "%Y"))   # the types of tornado_exposure
+  out$month <- format(out$date, "%m")
+  out$day <- format(out$date, "%d")
   out <- out[order(out$date, out$tornado_id, out$ZCTA), , drop = FALSE]
-  out <- out[, c(.exposure_columns(), .distance_columns), drop = FALSE]
+  out
+}
+
+.finish_distance <- function(out) {
+  out <- out[, .exposure_columns(), drop = FALSE]
   rownames(out) <- NULL
   out
 }
 
-.warn_geometric_centroids <- function(out) {
-  n <- length(unique(out$ZCTA[out$centroid_type == "geometric"]))
+.empty_distance <- function() .exposure()[0, , drop = FALSE]
+
+.warn_geometric_centroids <- function(out, cen) {
+  gz <- cen$ZCTA[cen$centroid_type == "geometric"]
+  n <- length(unique(out$ZCTA[out$ZCTA %in% gz]))
   if (n > 0L) {
     warning(n, " ZCTA", if (n > 1L) "s" else "", " in the result ",
             if (n > 1L) "have" else "has", " no residents, so ",
             if (n > 1L) "their centroids are" else "its centroid is",
             " the geometric center of the ZCTA, not a population-weighted ",
-            'one (centroid_type = "geometric").', call. = FALSE)
+            'one (see zcta_centroids$centroid_type).', call. = FALSE)
   }
   invisible(out)
 }
 
-.empty_distance <- function() {
-  e <- .exposure()[0, , drop = FALSE]
-  e$dist_km <- numeric(0); e$centroid_type <- character(0)
-  e$centroid_in_zcta <- logical(0)
-  e
-}
-
-# SPC paths: tornadoes in the request, with the centroid of each requested ZCTA
-# within v$threshold km of the path
-.select_distance <- function(v) {
+# Tornadoes of the request (years and ratings) as an sf of tracks
+.request_tracks <- function(v) {
   tracks <- .tracks()
   yr <- as.integer(substr(tracks$tornado_id, 1, 4))
-  keep <- yr %in% v$year_range & tracks$magnitude %in% v$magnitude
-  tracks <- tracks[keep, ]
+  tracks[yr %in% v$year_range & tracks$magnitude %in% v$magnitude, ]
+}
+
+.track_attrs <- function(tracks) {
+  a <- sf::st_drop_geometry(tracks)[, c("tornado_id", "date", "magnitude", "total_injury", "total_fatality",
+                                         "property_loss_tornado_total", "track_type")]
+  a$has_shape <- !is.na(tracks$modeled_path_area_m2)
+  a
+}
+
+# SPC tracks: tornadoes in the request, with the centroid of each requested ZCTA within
+# v$threshold km of the SPC line (or start point)
+.select_distance <- function(v) {
+  tracks <- .request_tracks(v)
   cen <- .centroids()
   cen <- cen[Reduce(`|`, lapply(v$geo_list, function(p) startsWith(cen$ZCTA, p))), ]
   out <- .empty_distance()
   if (nrow(tracks) > 0L && nrow(cen) > 0L) {
     vint <- .vintage_of(as.integer(substr(tracks$tornado_id, 1, 4)))
     .slow_distance_message(v$threshold, .vint_counts(vint), cen)
-    make_poly <- function(i, crs) {
-      .path_polygon(tracks[i, ], tracks$wid_yd[i], tracks$len_mi[i],
-                    tracks$track_type[i], crs = crs)
-    }
-    pr <- .distance_pairs(.distance_region(tracks), vint, cen, v$threshold,
-                          make_poly)
+    pr <- .distance_pairs(.distance_region(tracks), vint, cen$vintage, v$threshold,
+                          make_geom = function(i, crs) sf::st_transform(sf::st_geometry(tracks)[i], crs),
+                          make_target = function(j, crs) .centroid_points(cen[j, , drop = FALSE], crs))
     if (nrow(pr) > 0L) {
       pairs <- data.frame(tornado_id = tracks$tornado_id[pr$i], ZCTA = cen$ZCTA[pr$j],
-                          vintage = cen$vintage[pr$j], dist_km = pr$dist_km,
+                          vintage = cen$vintage[pr$j], centroid_dist_km = pr$dist_km,
                           stringsAsFactors = FALSE)
-      attrs <- sf::st_drop_geometry(tracks)[, c("tornado_id", "date", "magnitude",
-        "total_injury", "total_fatality", "property_loss_tornado_total", "track_type")]
-      out <- .assemble_distance(pairs, attrs, .exposure(), cen)
+      ov <- .exposure()
+      pairs$boundary_dist_km <- ifelse(paste(pairs$tornado_id, pairs$ZCTA) %in% paste(ov$tornado_id, ov$ZCTA),
+                                       ov$boundary_dist_km[match(paste(pairs$tornado_id, pairs$ZCTA), paste(ov$tornado_id, ov$ZCTA))], NA_real_)
+      out <- .finish_distance(.assemble_distance(pairs, .track_attrs(tracks), ov, cen))
     }
   }
   if (nrow(out) == 0L) {
     message("No tornado exposures found for ", .describe_request(v), ". ",
             "Try a wider year_range, more magnitudes, or a larger centroid_dist_km.")
   } else {
-    .warn_geometric_centroids(out)
+    .warn_geometric_centroids(out, cen)
+  }
+  out
+}
+
+# Full TIGER/Line ZCTA polygons (cb = FALSE) for the ZCTAs starting with `geo_list` of one
+# vintage, as an sf in EPSG:4269 with columns ZCTA and vintage. The national file is
+# downloaded once through tigris (its size is in the message) and cached.
+.full_zcta <- function(geo_list, vintage) {
+  size_mb <- c(`2000` = 680, `2010` = 524, `2020` = 528)[[as.character(vintage)]]
+  message("Boundary distances use the full TIGER/Line ZCTA boundaries of ", vintage,
+          ": a national file of about ", size_mb, " MB, downloaded once and cached by tigris.")
+  z <- tigris::zctas(year = vintage, cb = FALSE, progress_bar = FALSE)
+  z <- .standardize_zcta(z)
+  z <- z[Reduce(`|`, lapply(geo_list, function(p) startsWith(z$ZCTA, p))), ]
+  z <- sf::st_transform(z, 4269)
+  z$vintage <- vintage
+  z
+}
+
+# SPC tracks: tornadoes in the request, with the boundary of each requested ZCTA within
+# v$threshold km of the SPC line (or start point)
+.select_boundary <- function(v) {
+  tracks <- .request_tracks(v)
+  cen <- .centroids()
+  out <- .empty_distance()
+  if (nrow(tracks) > 0L) {
+    vint <- .vintage_of(as.integer(substr(tracks$tornado_id, 1, 4)))
+    zz <- do.call(rbind, lapply(sort(unique(vint)), function(vv) .full_zcta(v$geo_list, vv)))
+    if (!is.null(zz) && nrow(zz) > 0L) {
+      pr <- .distance_pairs(.distance_region(tracks), vint, zz$vintage, v$threshold,
+                            make_geom = function(i, crs) sf::st_transform(sf::st_geometry(tracks)[i], crs),
+                            make_target = function(j, crs) sf::st_transform(sf::st_geometry(zz)[j], crs))
+      if (nrow(pr) > 0L) {
+        pairs <- data.frame(tornado_id = tracks$tornado_id[pr$i], ZCTA = zz$ZCTA[pr$j],
+                            vintage = zz$vintage[pr$j], boundary_dist_km = pr$dist_km,
+                            stringsAsFactors = FALSE)
+        cc <- cen[match(paste(pairs$ZCTA, pairs$vintage), paste(cen$ZCTA, cen$vintage)), ]
+        has_cen <- !is.na(cc$lon); pairs <- pairs[has_cen, ]; cc <- cc[has_cen, ]   # ZCTAs outside the block data (Guam and others) have no centroid
+        pairs$centroid_dist_km <- .track_centroid_dist(sf::st_geometry(tracks)[match(pairs$tornado_id, tracks$tornado_id)], cc$lon, cc$lat)
+        out <- .finish_distance(.assemble_distance(pairs, .track_attrs(tracks), .exposure(), cen))
+      }
+    }
+  }
+  if (nrow(out) == 0L) {
+    message("No tornado exposures found for ", .describe_request(v), ". ",
+            "Try a wider year_range, more magnitudes, or a larger boundary_dist_km.")
   }
   out
 }

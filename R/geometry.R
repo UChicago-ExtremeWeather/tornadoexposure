@@ -1,6 +1,6 @@
 # Internal helpers for ZCTA boundary maps
 
-# Census boundary vintage used for plotting a year range: the latest of
+# Census boundary year used for plotting a year range: the latest of
 # 2000, 2010 and 2020 that is not after the middle of the range (2000 for
 # years before 2010).
 .plot_vintage <- function(year_range) {
@@ -38,7 +38,8 @@
 
 #' Retrieve ZCTA boundaries from tigris
 #'
-#' Returns boundaries for ZCTAs whose codes start with any of `geo_list`, from
+#' Returns the full TIGER/Line boundaries (not the generalized cartographic
+#' files) for ZCTAs whose codes start with any of `geo_list`, from
 #' the Census boundary year closest to the middle of `year_range` (2000, 2010 or
 #' 2020). A year range that spans boundary years is plotted on one boundary year.
 #'
@@ -51,9 +52,12 @@
 #' @noRd
 get_geometry <- function(geo_list, year_range) {
   year_plot <- .plot_vintage(year_range)
+  message("Maps use the full TIGER/Line ZCTA boundaries of ", year_plot, ": a national file of about ",
+          c(`2000` = 680, `2010` = 524, `2020` = 528)[[as.character(year_plot)]],
+          " MB, downloaded once and cached by tigris.")
   boundary <- tryCatch(
     withCallingHandlers(
-      tigris::zctas(starts_with = geo_list, year = year_plot, cb = TRUE,
+      tigris::zctas(starts_with = geo_list, year = year_plot, cb = FALSE,
                     progress_bar = FALSE),
       # the 2000 file splits discontiguous ZCTAs; .standardize_zcta() dissolves them
       warning = function(w) {

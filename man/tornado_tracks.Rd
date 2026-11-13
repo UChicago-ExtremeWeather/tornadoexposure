@@ -5,84 +5,55 @@
 \alias{tornado_tracks}
 \title{Tornado tracks}
 \format{
-An sf data frame with 38,027
-rows and 15 variables:
+An sf data frame with 38,027 rows and 17 variables plus the geometry:
 \describe{
-\item{tornado_id}{Tornado identifier, as in \link{tornado_exposure}.}
+\item{tornado_id}{As in \link{tornado_exposure}.}
 \item{date}{Date of the tornado.}
-\item{magnitude}{Rating from 0 to 5, or \code{NA} when unknown (as in
-\link{tornado_exposure}).}
-\item{total_injury, total_fatality}{Injuries and fatalities from the whole
-tornado (tornado-level totals).}
-\item{property_loss_tornado_total}{SPC property loss for the whole tornado
-in nominal dollars; \code{NA} when SPC recorded 0 or no value.}
-\item{track_type}{\code{"line"}, \code{"point_equal_area"} or \code{"point_half_width"}.
-Point tracks are approximations because the direction is unknown.}
-\item{width_imputed}{\code{TRUE} when SPC's width was 0 or missing and 10 yards
-was used instead. SPC's older format description assumes a minimum path width
-of 30 feet (10 yards); \code{data-raw/known_issues.md}, section Other fixed
-settings, gives the effect of 5 and 20 yards.}
-\item{len_mi}{Path length in miles as reported by SPC.}
-\item{wid_yd}{Path width in yards as used (after imputation), treated as the
-maximum width of the path.}
-\item{len_ratio}{Straight start-to-end distance divided by \code{len_mi}
-(\code{NA} for point tracks).}
-\item{tornado_area_m2}{Area of the path polygon in square meters (larger than
-the damage swath if \code{wid_yd} is the maximum width).}
-\item{loss_raw}{SPC property loss exactly as reported.}
-\item{loss_raw_unit}{\code{"millions"} (1996 to 2006) or \code{"dollars"} (2007
-onward): the unit of \code{loss_raw} in the current SPC file.}
-\item{geometry}{Track geometry in EPSG:4326.}
+\item{magnitude}{EF rating from 0 to 5, \code{NA} when unknown.}
+\item{total_injury, total_fatality}{Injuries and fatalities of the whole tornado, as SPC gives them.}
+\item{property_loss_tornado_total}{Loss in dollars, \code{NA} where SPC recorded 0.}
+\item{track_type}{\code{"line"} (a straight line from SPC's start to its end point) or \code{"point"} (no usable end point; a POINT at the start).}
+\item{len_mi}{SPC's length in miles, as given.}
+\item{wid_yd}{SPC's width in yards, as given (0 stays 0).}
+\item{slat, slon, elat, elon}{SPC's start and end coordinates, as given.}
+\item{len_ratio}{Straight-line length from the start to the end point divided by \code{len_mi}; \code{NA} for a point or a length of 0.}
+\item{modeled_path_area_m2}{Area of the modeled path polygon in square meters (EPSG:5070); \code{NA} for a point and for a width of 0.}
+\item{loss_raw, loss_raw_unit}{SPC's loss and its unit (\code{"millions"} or \code{"dollars"}).}
 }
 }
 \source{
-NOAA Storm Prediction Center severe weather database
-(\url{https://www.spc.noaa.gov/wcm/data/1950-2025_all_tornadoes.csv}).
-Built by \code{data-raw/process_tracks.R} (full rebuild) and extended year by year by
-\code{data-raw/update_data.R}.
+NOAA Storm Prediction Center severe weather database. Built by \code{data-raw/process_tracks.R}.
 }
 \usage{
 tornado_tracks
 }
 \description{
-One row per tornado (all ratings, 1996 onward), with the reported track
-geometry. Use it to map tornado tracks; join to \link{tornado_exposure} on
-\code{tornado_id} to get exposures. It includes tornadoes that intersect no ZCTA,
-so it has more rows than \code{tornado_exposure} has tornadoes.
+One row per tornado (the whole-track record of SPC, \code{sg == 1}) from
+1996 to 2025,
+with the track as geometry (EPSG:4326, longitude and latitude), SPC's values as given, and the modeled path area.
+38,027 tornadoes, including the
+644 that touch no ZCTA and are absent from \link{tornado_exposure}.
 }
 \details{
-Geometry is a LINESTRING from the SPC start to end coordinates for line
-tracks, and a POINT at the start coordinate for point tracks (unknown end, or
-end equal to start), in EPSG:4326. Track coordinates are trusted as reported.
-Coordinates for 1996 to 2006 are rounded to 0.01 degrees (about 1.1 km of
-latitude, so a coordinate can be off by up to about 0.55 km); coordinates from
-2007 onward are rounded to 0.0001 degrees (about 11 m). Positions of
-short tracks are therefore uncertain before 2007. No column flags this;
-filter on the year in \code{tornado_id} or join to \link{tornado_exposure}.
+\strong{Tracks with no usable end point.} For
+10,384 tornadoes
+(27.3\%) SPC's end coordinates are missing, 0 or equal to the start
+(10,383 have an end equal
+to the start), so the direction and extent of the path are unknown. They are drawn as a POINT at the start
+(\code{track_type = "point"}), SPC's raw coordinates stay in \code{slat}, \code{slon}, \code{elat} and \code{elon}, and no path shape is modeled for them (\code{modeled_path_area_m2} is \code{NA}
+and the \verb{modeled_*} columns of \link{tornado_exposure} are \code{NA}). Most are EF0 and short, but SPC gives a length for nearly all of them and some are long
+(\code{data-raw/known_issues.md}, section Tornadoes with no usable end point, gives the counts by rating, length, era and casualties). \code{get_data()}
+prints how many such tornadoes a request holds.
 
-\code{len_ratio} compares the straight start-to-end distance with the reported
-length. Small departures from 1 are expected: length is entered in tenths of
-a mile before 2007, coordinates are rounded, and real paths curve. Only
-values far from 1 suggest an inconsistency between coordinates and length
-(5.6\% of
-line tracks are above 1.5, against
-1.1\% from 2007 and
-21.9\% before). From 2007 the reported length is close to the
-straight-line distance, which suggests that it is computed from the
-coordinates, so \code{len_ratio} cannot independently validate modern
-coordinates. The coordinates are used for the geometry regardless.
+\strong{Width.} \code{wid_yd} is SPC's width in yards exactly as given. A width of 0 or missing
+(473 tornadoes, 138 of them lines)
+is never replaced: such a line has no modeled path polygon and its \verb{modeled_*} columns are \code{NA}.
 
-\code{tornado_area_m2} is the area of the path polygon (see \link{tornado_exposure})
-and is larger than the damage swath if SPC's width is the maximum width of the
-path (see \link{tornado_exposure}).
-
-The tornado-level attributes (\code{date}, \code{magnitude}, \code{total_injury},
-\code{total_fatality}, \code{property_loss_tornado_total}) are the same values as in
-\link{tornado_exposure}. They are repeated here because distance exposure (the
-\code{centroid_dist_km} argument) can return tornadoes that overlap no ZCTA, and
-those have no row in \code{tornado_exposure}. Injuries and fatalities are
-tornado-level totals. Property loss is in nominal dollars, \code{NA} when SPC
-recorded 0 or no value (which NOAA says does not mean $0); the raw SPC value
-is kept as \code{loss_raw} with its unit in \code{loss_raw_unit}.
+\strong{Loss.} SPC reports \code{loss} in millions of dollars through 2006 and in whole dollars from 2007. \code{loss_raw} and \code{loss_raw_unit} are SPC's
+value and its unit; \code{property_loss_tornado_total} is the loss in dollars (the conversion from millions is exact), \code{NA} where SPC recorded 0, which NOAA says
+does not mean $0.
+}
+\seealso{
+\link{tornado_exposure}, \link{spc_records}
 }
 \keyword{datasets}

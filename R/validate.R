@@ -1,5 +1,4 @@
-# Internal helpers: argument validation shared by get_data(), map_exposure() and
-# add_tracks().
+# Internal helpers: argument validation shared by get_data() and map_exposure().
 
 .exposure <- function() tornadoexposure::tornado_exposure
 .tracks <- function() tornadoexposure::tornado_tracks
@@ -17,22 +16,23 @@
     .check_proportion(x, "pop_thresh",
                       "the share of the ZCTA's residents inside the path")
   },
-  centroid_dist_km = function(x) .check_distance(x)
+  centroid_dist_km = function(x) .check_distance(x, "centroid_dist_km"),
+  boundary_dist_km = function(x) .check_distance(x, "boundary_dist_km")
 )
 
-# centroid_dist_km: a positive distance in km, with no upper limit
-.check_distance <- function(x) {
+# centroid_dist_km and boundary_dist_km: a positive distance in km, with no upper limit
+.check_distance <- function(x, name) {
   if (!is.numeric(x) || length(x) != 1L || is.na(x) || !is.finite(x)) {
-    stop("centroid_dist_km must be a single positive number of kilometers, ",
-         "for example centroid_dist_km = 10 (an example value, not a recommendation), or NULL.", call. = FALSE)
+    stop(name, " must be a single positive number of kilometers, ",
+         "for example ", name, " = 10 (an example value, not a recommendation), or NULL.", call. = FALSE)
   }
   if (x == 0) {
-    stop("centroid_dist_km = 0 is not allowed. Use a positive distance in ",
-         "kilometers, for example centroid_dist_km = 10 (an example value, not a recommendation), or NULL (the ",
+    stop(name, " = 0 is not allowed. Use a positive distance in ",
+         "kilometers, for example ", name, " = 10 (an example value, not a recommendation), or NULL (the ",
          "default) to return any overlap.", call. = FALSE)
   }
   if (x < 0) {
-    stop("centroid_dist_km must be a positive number of kilometers. Got ", x,
+    stop(name, " must be a positive number of kilometers. Got ", x,
          ".", call. = FALSE)
   }
   x
@@ -164,7 +164,7 @@ utils_head <- function(x, n = 5L) if (length(x) > n) c(x[seq_len(n)], "...") els
   list(name = given, value = .threshold_checks[[given]](thresholds[[given]]))
 }
 
-# Validates the arguments common to get_data(), map_exposure() and add_tracks().
+# Validates the arguments common to get_data() and map_exposure().
 # `fn` is the calling function's name (used in messages). `geo_list` and
 # `year_range` are NULL when the caller did not supply them.
 .validate_args <- function(fn, geography, geo_list, year_range, magnitude,
@@ -198,7 +198,9 @@ utils_head <- function(x, n = 5L) if (length(x) > n) c(x[seq_len(n)], "...") els
   def <- if (v$definition == "overlap") {
     "any overlap"
   } else if (v$definition == "centroid_dist_km") {
-    paste0("ZCTA centroid within ", v$threshold, " km of the path")
+    paste0("ZCTA centroid within ", v$threshold, " km of the SPC line")
+  } else if (v$definition == "boundary_dist_km") {
+    paste0("ZCTA boundary within ", v$threshold, " km of the SPC line")
   } else {
     paste0(v$definition, " >= ", v$threshold)
   }

@@ -3,61 +3,31 @@
 \docType{data}
 \name{zcta_centroids}
 \alias{zcta_centroids}
-\title{ZCTA centroids for distance exposure}
+\title{Population-weighted ZCTA centroids}
 \format{
-A data frame with 98,932
-rows and 7 variables:
+A data frame with 98932 rows and the variables:
 \describe{
-\item{ZCTA}{Five-character ZCTA code as a string.}
-\item{vintage}{Census boundary year (the column is named \code{vintage}): 2000, 2010 or 2020. Tornadoes of
-1996 to 2009 use 2000, 2010 to 2019 use 2010, and 2020 onward use 2020.}
-\item{lon, lat}{Centroid longitude and latitude in NAD83 (EPSG:4269),
-rounded to 5 decimals (about 1 m).}
-\item{centroid_type}{\code{"population"} or \code{"geometric"} (no residents).}
-\item{centroid_in_zcta}{Whether the centroid lies inside its own ZCTA
-polygon.}
-\item{zcta_pop}{Total population of the ZCTA in that boundary year (the same
-value as \code{zcta_pop} in \link{tornado_exposure}); used to fill the population
-columns for ZCTAs the path does not overlap.}
+\item{ZCTA}{Five-character ZCTA code.}
+\item{vintage}{Census boundary year of the ZCTA: 2000, 2010 or 2020.}
+\item{lon, lat}{Longitude and latitude of the centroid (NAD83, EPSG:4269).}
+\item{centroid_type}{\code{"population"} or \code{"geometric"}.}
+\item{centroid_in_zcta}{Whether the centroid lies inside its own ZCTA polygon.}
+\item{zcta_pop}{Total population of the ZCTA: the sum of its blocks.}
+\item{zcta_land_area_m2}{Census land area (\code{ALAND}) in square meters.}
+\item{zcta_polygon_area_m2}{Area of the full TIGER/Line polygon in square meters (EPSG:5070).}
 }
 }
 \source{
-Census Bureau TIGER/Line tabulation blocks (2000, 2010 and 2020),
-2010 and 2000 PL 94-171 redistricting files for block population, and ZCTA
-boundaries via tigris. Built by \code{data-raw/add_centroids.R}.
+Census Bureau TIGER/Line tabulation blocks and ZCTA boundaries; PL 94-171 files for 2000 and 2010. Built by \code{data-raw/add_centroids.R}.
 }
 \usage{
 zcta_centroids
 }
 \description{
-One population-weighted centroid per ZCTA and Census boundary year (2000, 2010 and
-2020), used when \code{centroid_dist_km} is given to \code{\link[=get_data]{get_data()}},
-\code{\link[=map_exposure]{map_exposure()}} or \code{\link[=add_tracks]{add_tracks()}}. A ZCTA is then exposed when its centroid
-lies within that many kilometers of the tornado path.
-}
-\details{
-The centroid is the mean of the block internal points of the ZCTA's blocks
-(fields \code{INTPTLAT} and \code{INTPTLON} in the Census TIGER/Line block files),
-weighted by block population and computed on the sphere. Blocks are assigned
-to ZCTAs through their internal point, as for \code{zcta_pop}. It therefore sits
-where residents live, not at the geometric center of the ZCTA, and the two can
-differ by many kilometers for large ZCTAs (for example in Alaska) where
-residents are concentrated in one town.
-
-ZCTAs with no residents (55,
-144 and
-143 in the 2000, 2010 and 2020 boundary years)
-use the geometric centroid of the polygon (\code{centroid_type = "geometric"}), or a point on
-the polygon surface if the geometric centroid falls outside it. A result that
-contains such ZCTAs triggers a warning.
-
-A population-weighted centroid can fall outside its own polygon when the ZCTA
-is crescent-shaped or has several parts (2365 of
-98,932 ZCTA-boundary-year rows).
-\code{centroid_in_zcta} flags them. The centroid is kept where it is, because it
-is the defined quantity, and the distance to it is used as is.
-
-ZCTAs without a polygon in the Census boundary file (see the known issues in
-\code{data-raw/known_issues.md} for the 2000 boundary year) have no centroid.
+One population-weighted centroid for each ZCTA and Census boundary year (2000, 2010 and 2020):
+98,932 rows. The centroid is the average location of the ZCTA's
+residents: census block internal points weighted by block population, averaged on the sphere. A ZCTA with no residents uses the geometric centroid of its polygon
+(\code{centroid_type = "geometric"}), moved to a point on the polygon if the centroid falls outside it. Used by \code{get_data(centroid_dist_km = )}.
+The coordinates are as computed, not rounded.
 }
 \keyword{datasets}

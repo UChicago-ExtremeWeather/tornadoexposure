@@ -11,7 +11,8 @@ get_data(
   magnitude = c(0:5, NA),
   area_thresh = NULL,
   pop_thresh = NULL,
-  centroid_dist_km = NULL
+  centroid_dist_km = NULL,
+  boundary_dist_km = NULL
 )
 }
 \arguments{
@@ -34,82 +35,95 @@ magnitude of \code{NA}; they are kept only if \code{NA} is in the vector, as in
 \code{magnitude = c(1:5, NA)}. Ratings before 2007 are on the original Fujita
 (F) scale.}
 
-\item{area_thresh}{\code{NULL} (default) returns every tornado whose path
-overlaps the ZCTA, including very small overlaps. A number in (0, 1]
-keeps rows with \code{area_prop_affected >= area_thresh} (0.5 means half of the
-ZCTA's land area). \code{0} is an error. A higher threshold means fewer ZCTAs
-qualify as exposed. Area share depends on the size of the ZCTA as well as on
-how the path crossed it. Cannot be combined with \code{pop_thresh}.}
+\item{area_thresh}{\code{NULL} (default) returns every tornado that touched the
+ZCTA, including very small overlaps. A number in (0, 1] keeps rows with
+\code{modeled_area_prop >= area_thresh} (0.5 means half of the ZCTA's polygon area).
+\code{0} is an error. A higher threshold means fewer ZCTAs qualify as exposed. The
+area share depends on the size of the ZCTA as well as on how the path crossed it.
+Tornadoes with no modeled path shape are not evaluated and not returned. Cannot
+be combined with another definition.}
 
 \item{pop_thresh}{\code{NULL} (default) or a proportion in (0, 1]. Keeps rows with
-\code{pop_prop_affected >= pop_thresh}: the share of the ZCTA's resident
+\code{modeled_pop_prop >= pop_thresh}: the share of the ZCTA's resident
 population (total population, all ages, at the census year of the ZCTA's
-boundary year) estimated to live inside the path, from block-level population
+boundary year) estimated to live inside the modeled path, from block-level population
 allocated by the share of each block's area inside the path. It follows where
 residents live rather than how much land the path covered. \code{0} is an error.
 ZCTAs with no residents have no population share and are never returned
-under this definition. The threshold applies to the share
-(\code{pop_prop_affected}) only. The count of residents in the path (\code{pop_affected})
-and the ZCTA's population (\code{zcta_pop}) are returned by every call, so you can
+under this definition. Tornadoes with no modeled path shape are not evaluated and
+not returned. The count of residents (\code{modeled_pop_affected}) and the ZCTA's
+population (\code{zcta_pop}) are returned by every call, so you can
 filter on the count yourself, for example
-\code{subset(x, pop_affected >= n)} with \code{n} a number of residents of your choice. Cannot be combined with \code{area_thresh} or
-\code{centroid_dist_km}.}
+\code{subset(x, modeled_pop_affected >= n)} with \code{n} a number of residents of your choice. Cannot be combined with another definition.}
 
 \item{centroid_dist_km}{\code{NULL} (default) or a positive number of kilometers.
 Keeps ZCTAs whose population-weighted centroid (see \link{zcta_centroids}) lies
-within this distance of the tornado path polygon, whether or not the path
-overlaps the ZCTA. \code{0} is an error and there is no upper limit. Rows have
-the same columns as other calls plus \code{dist_km} (0 when the centroid is inside
-the path), \code{centroid_type} and \code{centroid_in_zcta}; \code{area_prop_affected},
-\code{pop_affected} and the related columns are 0 for ZCTAs the path does not
-overlap. Widening the radius only adds ZCTAs, but the result is not a
-superset of the overlap set: a large ZCTA crossed at its edge can have a
-centroid farther than the radius (\code{data-raw/known_issues.md} gives the share of overlap
-pairs within each radius). Choose the radius to fit your question. SPC's
-paths are straight lines between the start and end points and real paths
-curve: \code{data-raw/known_issues.md} (section "Path accuracy") gives the median
+within this distance of the SPC line (of the start point for a tornado with no
+usable end point), whether or not the path touches the ZCTA. \code{0} is an error and
+there is no upper limit. The result is not a superset of the overlap set: a large
+ZCTA crossed at its edge can have a centroid farther than the radius. For ZCTAs
+the path does not touch, \verb{modeled_*} columns are 0 (a tornado with a modeled path
+shape) or \code{NA} (a tornado without one) and \code{boundary_dist_km} is \code{NA}
+(use \code{boundary_dist_km} to measure it). SPC's paths are straight lines
+between the start and end points and real paths curve:
+\code{data-raw/known_issues.md} (section "Path accuracy") gives the median
 and 90th percentile of the largest distance between the surveyed
-centerline and the modeled line, by tornado length, and a radius smaller than
-those distances cannot separate exposure from path-location error. An empty
-result is a message, not an error. Large radii
+centerline and the SPC line, by tornado length, and a radius smaller than
+those distances cannot separate exposure from path-location error. Large radii
 across many years and ZCTAs can be slow, and a message gives a rough time
-before the work starts. Cannot be combined with \code{area_thresh} or
-\code{pop_thresh}.}
+before the work starts. Cannot be combined with another definition.}
+
+\item{boundary_dist_km}{\code{NULL} (default) or a positive number of kilometers.
+Keeps ZCTAs whose boundary lies within this distance of the SPC line (of the start
+point for a tornado with no usable end point); the distance is 0 when the line
+touches the ZCTA. There is no upper limit. The distance uses the full
+TIGER/Line ZCTA boundaries (not the generalized cartographic files), a national
+file of about 680 MB (2000 boundaries), 524 MB (2010) or 528 MB (2020) that is
+downloaded once and cached; a message says which. Cannot be combined with another
+definition.}
 }
 \value{
 A data frame (no geometry) with one row per tornado-ZCTA pair and
 the columns described in \link{tornado_exposure}. Injury and fatality counts
 are tornado-level totals repeated on every ZCTA the tornado touched, so do
-not sum them across ZCTAs. With \code{centroid_dist_km} there are three more
-columns, \code{dist_km}, \code{centroid_type} and \code{centroid_in_zcta}. If nothing matches, an empty data frame with
+not sum them across ZCTAs. If nothing matches, an empty data frame with
 the same columns is returned and a message explains the request.
 }
 \description{
 Returns one row per exposed tornado-ZCTA pair for the requested ZCTAs, years
-and tornado magnitudes. A ZCTA is exposed to a tornado when the tornado's
-path polygon overlaps it (the default) or, if \code{area_thresh} is given, when
-the share of the ZCTA's land area covered by the path is at least
-\code{area_thresh}, or, if \code{pop_thresh} is given, when the share of the ZCTA's
-residents inside the path is at least \code{pop_thresh}, or, if \code{centroid_dist_km}
-is given, when the population-weighted centroid of the ZCTA (the average
-location of its residents, from census block locations weighted by population)
-lies within that
-many kilometers of the path. A call uses exactly one of these definitions. Thresholds are applied to each tornado on its own, not
-cumulatively across tornadoes.
+and tornado magnitudes. A call uses exactly one exposure definition. By
+default a ZCTA is exposed when the tornado touched it: the modeled path polygon
+(the SPC line buffered by the reported width) overlaps it, the centerline lies in
+it when SPC reports no width, or the start point lies in it for a tornado with no
+usable end point. With \code{area_thresh} the modeled share of the ZCTA's area inside
+the path must be at least that share, with \code{pop_thresh} the modeled share of its
+residents must be, with \code{centroid_dist_km} the ZCTA's population-weighted centroid
+must lie within that distance of the SPC line, and with \code{boundary_dist_km} the ZCTA's
+boundary must lie within that distance of the SPC line. Thresholds are applied to
+each tornado on its own, not cumulatively across tornadoes.
 }
 \details{
-Every row returned is an exposed ZCTA under the single definition you
-passed. ZCTAs the path did not touch are never returned.
+\strong{Modeled columns.} The columns that begin with \code{modeled_} come from a straight
+line at SPC's single width, which NWS instructions define as the maximum width of
+the damage path. They run about 1.2 times the area of the NWS surveyed damage
+swaths, are noisy for any single tornado, and are approximations, not a damage
+boundary (\code{data-raw/known_issues.md}, section "Modeled columns", gives the
+comparison with the surveyed swaths). They are \code{NA} for a tornado with no
+usable end point (a point: SPC's end coordinates are missing, 0 or equal to the
+start) and for a line with a width of 0 or missing: no path shape is modeled for
+them. \code{area_thresh} and \code{pop_thresh} do not evaluate such tornadoes and do not
+return them; overlap, \code{centroid_dist_km} and \code{boundary_dist_km} include them, and
+every call prints how many are in the request (see \link{tornado_tracks}).
 
 \strong{Choosing a definition.} Overlap counts any intersection of the path with
 the ZCTA, however small. The area share depends on the size of the ZCTA as
 well as on how the path crossed it, and the population share follows where
 residents live: a path through a dense town and the same area of farmland in
 one ZCTA have the same area share but very different population shares. The
-centroid distance does not need an overlap, and the ZCTAs it returns are not
+distance definitions are measured from the SPC line (the start point for a
+tornado with no usable end point) and have no upper limit; their ZCTAs are not
 a superset of the overlap set. \code{data-raw/known_issues.md} in the repository
-compares the definitions for the Joplin tornado and shows how many of the
-overlapped ZCTAs each radius captures.
+compares the definitions for the Joplin tornado.
 }
 \examples{
 # Joplin, Missouri, May 2011: ZCTAs starting with 648, EF5 only
@@ -118,13 +132,13 @@ get_data(geo_list = "648", year_range = 2011, magnitude = 5)
 # EF1 and above, keeping tornadoes whose rating is unknown
 get_data(geo_list = "648", year_range = 2011, magnitude = c(1:5, NA))
 
-# only ZCTAs where the path covered at least 5\% of the land area
-# (5\% is an example value, not a recommendation)
+# only ZCTAs where the modeled path covered at least 5\% of the ZCTA's area
+# (5\% is an example, not a recommendation)
 get_data(geo_list = "648", year_range = 2011, magnitude = 5,
          area_thresh = 0.05)
 
-# ZCTAs whose population-weighted centroid is within 10 km of the path
-# (10 km is an example value, not a recommendation)
+# ZCTAs whose population-weighted centroid is within 10 km of the SPC line
+# (10 km is an example, not a recommendation)
 get_data(geo_list = "648", year_range = 2011, magnitude = 5,
          centroid_dist_km = 10)
 
