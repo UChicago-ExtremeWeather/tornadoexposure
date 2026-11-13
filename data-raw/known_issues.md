@@ -250,11 +250,11 @@ A call uses one exposure definition. The *touched* definition (the default) retu
 
 | Radius (km) | Tornado-ZCTA rows | Tornadoes without a row | Seconds | Touched pairs with the centroid within the radius | Rows that are not touched pairs |
 |---|---|---|---|---|---|
-| 1 | 4,843 | 33,767 | 4 | 8.1% | 3.9% |
+| 1 | 4,843 | 33,767 | 5 | 8.1% | 3.9% |
 | 5 | 36,736 | 16,408 | 11 | 45.0% | 29.2% |
 | 10 | 103,695 | 5,419 | 25 | 76.0% | 57.7% |
 | 25 | 504,343 | 343 | 100 | 98.0% | 88.8% |
-| 50 | 1,774,382 | 13 | 338 | 99.8% | 96.8% |
+| 50 | 1,774,382 | 13 | 340 | 99.8% | 96.8% |
 
 The result of a centroid-distance call is not a superset of the touched set: a large ZCTA crossed at its edge can have a centroid farther than the radius, as the share of touched pairs within each radius shows. The distance from the SPC line to the centroid is measured in a projection that suits the region (EPSG:5070 in the 48 states, EPSG:3338 in Alaska, ESRI:102007 in Hawaii, EPSG:32161 in Puerto Rico).
 <!-- distance:end -->
