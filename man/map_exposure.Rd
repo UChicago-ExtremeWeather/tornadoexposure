@@ -72,7 +72,7 @@ the path does not touch, \verb{modeled_*} columns are 0 (a tornado with a modele
 shape) or \code{NA} (a tornado without one) and \code{boundary_dist_km} is \code{NA}
 (use \code{boundary_dist_km} to measure it). SPC's paths are straight lines
 between the start and end points and real paths curve:
-\code{data-raw/known_issues.md} (section "Path accuracy") gives the median
+\code{data-raw/known_issues.md} (section "Modeled columns") gives the median
 and 90th percentile of the largest distance between the surveyed
 centerline and the SPC line, by tornado length, and a radius smaller than
 those distances cannot separate exposure from path-location error. Large radii

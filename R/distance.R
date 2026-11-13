@@ -110,7 +110,8 @@
 # 5, 10, 25 and 50 km are in the table of data-raw/known_issues.md (written by
 # data-raw/qa/23_distance_tables.R); the estimate interpolates between them on
 # log scales (and extends the last segment beyond 50 km), and scales with the
-# number of (track, ZCTA) combinations in the request. Only a rough guide.
+# number of (track, ZCTA) combinations in the request. Only a rough guide: the times vary between runs and
+# data-raw/qa/check_documented_claims.R requires them to be within a factor of 2 of the latest measurement.
 .distance_timings <- data.frame(radius_km = c(1, 5, 10, 25, 50), seconds = c(5, 12, 28, 111, 343))
 .distance_seconds <- function(radius_km, n_tracks_by_vint, n_zcta_by_vint) {
   v <- names(n_tracks_by_vint)

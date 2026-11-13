@@ -84,15 +84,15 @@ All ratings are included, EF0 to EF5 and unknown (see \code{magnitude}).
 \strong{Modeled columns.} The columns that begin with \code{modeled_} come from the modeled path polygon: a straight line at SPC's single
 width. NWS instructions for Storm Data define the path width entered for a tornado as the maximum width over the entire path (or
 of each segment), SPC compiles its database from Storm Data, and this package treats \code{wid} as that maximum width
-(\code{data-raw/known_issues.md}, section Path accuracy, gives the source and two checks that agree). The width is applied along the whole track, so
+(\code{data-raw/known_issues.md}, section Modeled columns, gives the source and the comparison with the NWS damage polygons). The width is applied along the whole track, so
 every modeled area and proportion is larger than that of the damage swath, most for long tracks whose width varied: for the
-tornadoes whose NWS damage polygons touch the linked survey line, the modeled path area is a median of
+tornadoes with a usable NWS damage swath (the damage polygons of the linked survey line; the comparison is defined in \code{data-raw/known_issues.md}), the modeled path area is a median of
 1.18 times the area of the NWS damage polygons
 (10th to 90th percentile 0.41 to 2.03), the modeled area share of a ZCTA is
 1.21 times the share computed from the NWS polygons (0.37 to 2.99) and
 the modeled resident share 1.16 times (0.29 to 3.60). They are noisy for any single
 tornado and are approximations, not a damage boundary. SPC gives only a start and an end point, so each path is a straight
-line even though real tornadoes curve (section Path accuracy of \code{data-raw/known_issues.md}). The modeled columns are \code{NA} for the
+line even though real tornadoes curve (section Modeled columns of \code{data-raw/known_issues.md}). The modeled columns are \code{NA} for the
 tornadoes with no modeled path shape (\code{track_type = "point"}, and lines with \code{wid_yd} of 0).
 
 \strong{Census boundary year.} The Census Bureau publishes ZCTA boundaries
@@ -137,7 +137,7 @@ the Census Bureau, which is larger for small areas.
 \strong{Distances.} \code{boundary_dist_km} is the distance from the SPC line (the start point for a point tornado) to the
 ZCTA boundary of the boundary year: 0 when the line touches the ZCTA. Every row of this dataset is a ZCTA that the modeled path or
 the line touched, so the value is 0 except where the polygon, but not the line, reaches the ZCTA
-(0 rows). \code{centroid_dist_km} is the distance from the same line or
+(1,071 rows). \code{centroid_dist_km} is the distance from the same line or
 point to the population-weighted centroid of the ZCTA (\link{zcta_centroids}). Both are in kilometers. For ZCTAs a tornado did not touch use
 \code{get_data(centroid_dist_km = ...)} or \code{get_data(boundary_dist_km = ...)}.
 

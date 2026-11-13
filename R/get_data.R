@@ -79,7 +79,7 @@
 #'   shape) or `NA` (a tornado without one) and `boundary_dist_km` is `NA`
 #'   (use `boundary_dist_km` to measure it). SPC's paths are straight lines
 #'   between the start and end points and real paths curve:
-#'   `data-raw/known_issues.md` (section "Path accuracy") gives the median
+#'   `data-raw/known_issues.md` (section "Modeled columns") gives the median
 #'   and 90th percentile of the largest distance between the surveyed
 #'   centerline and the SPC line, by tornado length, and a radius smaller than
 #'   those distances cannot separate exposure from path-location error. Large radii

@@ -18,15 +18,15 @@
 #' **Modeled columns.** The columns that begin with `modeled_` come from the modeled path polygon: a straight line at SPC's single
 #' width. NWS instructions for Storm Data define the path width entered for a tornado as the maximum width over the entire path (or
 #' of each segment), SPC compiles its database from Storm Data, and this package treats `wid` as that maximum width
-#' (`data-raw/known_issues.md`, section Path accuracy, gives the source and two checks that agree). The width is applied along the whole track, so
+#' (`data-raw/known_issues.md`, section Modeled columns, gives the source and the comparison with the NWS damage polygons). The width is applied along the whole track, so
 #' every modeled area and proportion is larger than that of the damage swath, most for long tracks whose width varied: for the
-#' tornadoes whose NWS damage polygons touch the linked survey line, the modeled path area is a median of
+#' tornadoes with a usable NWS damage swath (the damage polygons of the linked survey line; the comparison is defined in `data-raw/known_issues.md`), the modeled path area is a median of
 #' `r sprintf("%.2f", .doc_number("modeled_vs_dat_path_area_median"))` times the area of the NWS damage polygons
 #' (10th to 90th percentile `r sprintf("%.2f", .doc_number("modeled_vs_dat_path_area_p10"))` to `r sprintf("%.2f", .doc_number("modeled_vs_dat_path_area_p90"))`), the modeled area share of a ZCTA is
 #' `r sprintf("%.2f", .doc_number("modeled_vs_dat_area_share_median"))` times the share computed from the NWS polygons (`r sprintf("%.2f", .doc_number("modeled_vs_dat_area_share_p10"))` to `r sprintf("%.2f", .doc_number("modeled_vs_dat_area_share_p90"))`) and
 #' the modeled resident share `r sprintf("%.2f", .doc_number("modeled_vs_dat_pop_share_median"))` times (`r sprintf("%.2f", .doc_number("modeled_vs_dat_pop_share_p10"))` to `r sprintf("%.2f", .doc_number("modeled_vs_dat_pop_share_p90"))`). They are noisy for any single
 #' tornado and are approximations, not a damage boundary. SPC gives only a start and an end point, so each path is a straight
-#' line even though real tornadoes curve (section Path accuracy of `data-raw/known_issues.md`). The modeled columns are `NA` for the
+#' line even though real tornadoes curve (section Modeled columns of `data-raw/known_issues.md`). The modeled columns are `NA` for the
 #' tornadoes with no modeled path shape (`track_type = "point"`, and lines with `wid_yd` of 0).
 #'
 #' **Census boundary year.** The Census Bureau publishes ZCTA boundaries
