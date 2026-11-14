@@ -1,11 +1,13 @@
 <!-- intro:start -->
-# Known issues in the source data and the model
+# Known issues in the source data and the derived tables
 
 Numbers below were computed by the scripts in `data-raw/qa/` from the data built from the SPC file `1950-2025_all_tornadoes.csv` (accessed 2026-10-12, md5 and size in `provenance.txt`) and the NWS Damage Assessment Toolkit data queried on 2026-11-11. They describe the current build; run the scripts again after a data change. No data are changed to work around any of these items.
 
 **Terms used on this page.**
 
-* *Modeled path polygon*: the area of a tornado's path as the package models it: the straight line from SPC's start point to its end point, buffered by half of SPC's width with flat ends. It exists only for a line track with a positive width.
+* *Exposed*: a ZCTA is exposed by the SPC when the SPC line (the straight line from SPC's start point to its end point) crosses it, that is, a positive length of the line lies in it; for a tornado with no usable end point, when the ZCTA contains the start point. It is exposed by the NWS survey when a damage polygon of a linked NWS line covers some land in it.
+* *Footprint*: the union of the damage polygons rated EF0 to EF5 that a linked DAT line touches (the polygon rule); it is cut into zones by the highest rating that covers each part.
+* *Land-only shape*: a unit polygon (ZCTA or block) minus the Census water polygons inside it.
 * *No usable end point*: SPC's end coordinates are missing, 0, or equal to the start. The tornado is a point at its start (`track_type = "point"`); its direction and extent are unknown.
 * *Chord*: the straight-line distance between a tornado's start and end points.
 * *Percentiles* (10th, 25th, 75th, 90th and 99th, with the median): they describe the spread of a distribution; none is a tested choice.
@@ -18,17 +20,19 @@ Numbers below were computed by the scripts in `data-raw/qa/` from the data built
 
 | Dataset | Contents | Rows | Columns | File size (xz) |
 |---|---|---|---|---|
-| `spc_records` | SPC, every tornado record from 1996 on, every column and every row (all `sg`), as SPC gives them | 38,953 | 32 | 0.77 MB |
-| `tornado_tracks` | SPC, one row per tornado (whole-track record): a line from the raw start to the raw end point, or a point at the start for a tornado with no usable end point; SPC's raw coordinates, length and width; loss as given and in dollars | 38,027 | 17 + geometry | 1.30 MB |
-| `tornado_exposure` | one row per tornado and ZCTA touched: distances (`boundary_dist_km`, `centroid_dist_km`), the `modeled_*` columns, ZCTA polygon and land area, ZCTA population | 57,754 | 22 | 3.07 MB |
-| `zcta_centroids` | Census, one population-weighted centroid per ZCTA and boundary year, with the ZCTA's population, polygon area and land area | 98,932 | 9 | 2.48 MB |
+| `spc_records` | SPC, every tornado record from 1996 on, every column and every row (all `sg`), as SPC gives them | 38,953 | 32 | 0.78 MB |
+| `tornado_tracks` | SPC, one row per tornado (whole-track record): a line from the raw start to the raw end point, or a point at the start for a tornado with no usable end point; SPC's raw coordinates, length and width; loss as given and in dollars | 38,027 | 18 + geometry | 1.35 MB |
+| `tornado_exposure` | one row per tornado and ZCTA that the SPC line crosses or a linked NWS polygon covers land in: line length and share, distances (`boundary_dist_km`, `centroid_dist_km`), ZCTA areas and population, and the DAT columns (area and residents by rating, damage point counts) | 57,407 | 48 | 2.50 MB |
+| `dat_exposure_tract` | NWS columns only, one row per tornado and census tract that a linked NWS polygon covers land in: land-only area share and residents by rating, damage point counts | 8,005 | 28 | 0.35 MB |
+| `dat_exposure_blockgroup` | as `dat_exposure_tract`, for census block groups | 12,308 | 28 | 0.50 MB |
+| `zcta_centroids` | Census, one population-weighted centroid per ZCTA and boundary year, with the ZCTA's population, polygon area and land area | 98,932 | 10 | 2.90 MB |
 | `dat_points` | NWS Damage Assessment Toolkit, every damage point, all fields, unmodified | 241,456 | 28 + geometry | 12.89 MB |
 | `dat_lines` | NWS Damage Assessment Toolkit, every damage line (centerline of a surveyed track), all fields, unmodified | 13,021 | 32 + geometry | 3.09 MB |
 | `dat_polygons` | NWS Damage Assessment Toolkit, every damage polygon, all fields, unmodified | 11,172 | 21 + geometry | 3.41 MB |
 | `tornado_dat_link` | one row per DAT line linked to an SPC tornado, with every number that describes the link | 11,573 | 13 | 0.47 MB |
 | `dat_polygon_line_link` | one row per DAT polygon and line dated within a day of each other: distance and the share of the line inside the polygon | 466,150 | 4 | 3.22 MB |
 
-The files in `data/` add up to 30.69 MB. Census inputs (ZCTA boundaries, block populations) are read when the data are built and are not shipped; maps and the boundary distance download the full TIGER/Line files (sizes in `?get_data` and `?map_exposure`).
+The files in `data/` add up to 31.45 MB. Census inputs (ZCTA boundaries, block populations and shapes, water polygons) are read when the data are built and are not shipped; maps and the boundary distance download the full TIGER/Line files (sizes in `?get_data` and `?map_exposure`).
 <!-- provides:end -->
 
 <!-- fidelity:start -->
@@ -43,20 +47,22 @@ The aim of the package is the highest quality of data on tornadoes, changed as l
 | Identifiers shared by two tornadoes are renamed `_1`, `_2` | 4 records (2001_56_1, 2001_56_2, 2002_506_1, 2002_506_2) | Yes: an identifier, not a source value; the raw `om` stays in `spc_records` |
 | Loss in millions of dollars (before 2007) is converted to dollars (`loss` times 1e6) | 6,447 nonzero values; the largest difference between the stored dollars and the exact product is 4.66e-10 dollars (the build stops if a value is not a whole number of dollars up to floating-point error) | Yes: an exact unit conversion; the raw value and unit are kept in `loss_raw` and `loss_raw_unit` |
 | A loss of 0 becomes `NA` in `property_loss_tornado_total` | 19,567 tornadoes | Yes: NOAA says 0 does not mean $0; the raw value is kept in `loss_raw` |
-| A tornado with no usable end point (end coordinates missing, 0 or equal to the start) is a POINT at the start; SPC's raw coordinates, length and width are kept | 10,384 tornadoes (27.3%): end 0 1, end equal to the start 10,383 | Yes: no end point is invented; no shape is modeled for them |
-| A width of 0 or missing is never replaced | 473 tornadoes (138 lines, 335 points) | Nothing is changed; a line with a width of 0 has no modeled path polygon (its ZCTAs are those that a positive length of the line lies in, 277 rows) and its `modeled_*` columns are `NA` |
-| The modeled path of a line with a positive width is the straight line from SPC's start to SPC's end, buffered by half of SPC's width with flat ends | 27,505 tornadoes | A model, not a source geometry: it is not a damage boundary (section Modeled columns) |
-| Coordinates are projected to EPSG:5070 for areas, to a regional CRS for distances (EPSG:5070 in the 48 states, EPSG:3338 Alaska, ESRI:102007 Hawaii, EPSG:32161 Puerto Rico) and to EPSG:4269 for block points; maps are drawn in EPSG:4326 | every geometry that is measured or intersected | Yes: projection |
+| A tornado with no usable end point (end coordinates missing, 0 or equal to the start) is a POINT at the start; SPC's raw coordinates, length and width are kept | 10,384 tornadoes (27.3%): end 0 1, end equal to the start 10,383 | Yes: no end point is invented; such a tornado exposes only the ZCTA that contains the start point |
+| A width of 0 or missing is never replaced; the width is not used to draw any shape | 473 tornadoes (138 lines, 335 points) | Nothing is changed |
+| The SPC line is the straight line (straight in EPSG:5070) from SPC's start to SPC's end point; a ZCTA is exposed when a positive length of the line lies in it, and the share of the line in each ZCTA is measured in EPSG:5070 (the length of the whole line is measured on the sphere) | 27,643 line tornadoes, 46,711 SPC rows; 0 line-ZCTA pairs that touch at a point only (zero length) are not exposures | A line between two rounded points, not a damage path (section SPC exposure) |
+| Coordinates are projected to EPSG:5070 for areas, lengths and overlays, to a regional CRS for distances (EPSG:5070 in the 48 states, EPSG:3338 Alaska, ESRI:102007 Hawaii, EPSG:32161 Puerto Rico) and to EPSG:4269 for block points; maps are drawn in EPSG:4326 | every geometry that is measured or intersected | Yes: projection |
 | ZCTA polygons repaired with `st_make_valid()` (counted in EPSG:5070 as read) | 2000 file: 0 of 32,038; 2010 file: 1 of 33,120; 2020 file: 0 of 33,791 | Yes: repairing invalid geometry |
-| Census block polygons repaired with `st_make_valid()` (counted over all blocks as read; the pipeline repairs only the blocks near a path) | invalid blocks: 2000: 0 of 8,262,363; 2010: 0 of 11,155,486; 2020: 0 of 8,174,955 | Yes: repairing invalid geometry |
-| Intersections of paths with ZCTAs: pieces of one tornado in one ZCTA are merged; pieces that are not polygons are dropped for a modeled path | 0 pieces of exactly zero area; 57,754 tornado-ZCTA rows (47,505 from a path polygon, 277 from a centerline, 9,972 from a start point; 0 start points lie in more than one ZCTA) | Yes: merging polygons |
-| A start point that lies in no ZCTA has no row in `tornado_exposure` | 412 point tornadoes (they stay in `tornado_tracks`) | Yes: nothing is moved or invented |
-| `modeled_area_prop` is the modeled intersection divided by the area of the full ZCTA polygon, not capped | 47,505 rows; 1 row above 1 (by 6.18e-13, floating-point error); `zcta_polygon_area_m2` differs from `zcta_land_area_m2` (ALAND) by more than 1% in 18,929 of 57,754 rows, by more than 10% in 2,335 and by more than 50% in 268 | Nothing is changed or capped; both areas are shipped |
+| Census block polygons repaired with `st_make_valid()` (counted over all blocks as read by the audit 52b; the DAT pipeline reads only the blocks of the tracts that the footprints reach and found 0 invalid) | invalid blocks: 2000: 0 of 8,262,363; 2010: 0 of 11,155,486; 2020: 0 of 8,174,955 | Yes: repairing invalid geometry |
+| Intersections of lines with ZCTAs: the pieces of one line in one ZCTA are merged (their lengths are added) | 56,683 SPC rows (46,711 from a line, 9,972 from a start point; 0 start points lie in more than one ZCTA) | Yes: merging |
+| A start point that lies in no ZCTA has no SPC row in `tornado_exposure` | 412 point tornadoes (they stay in `tornado_tracks`) | Yes: nothing is moved or invented |
+| Land-only shapes: the Census water polygons (AREAWATER) are subtracted from each ZCTA polygon and from each block polygon the footprints reach; areas and residents use the result, and the unit polygons and water polygons themselves are not changed | ZCTAs with a water polygon inside: 2000: 28,528 of 32,038; 2010: 29,217 of 33,120; 2020: 29,352 of 33,791; blocks with a water polygon inside: 270,526 of 1,288,841 (blocks of the tracts the footprints reach); water polygons repaired: 0; the land-only ZCTA shape differs from `ALAND` by more than 1% for 281 (2000), 298 (2010) and 252 (2020) ZCTAs | Yes: subtracting Census water polygons from Census unit shapes; both areas and `ALAND` are shipped |
+| A block whose land-only shape is empty (area at most 0.001 square meters) but that has residents: the residents are allocated by the share of the block polygon that a footprint zone covers, and the block takes no part in the area shares | 59,298 of 1,288,841 blocks of the tracts reached have no land (27 with a Census land area above 0); 52 hold residents (526), of which 32.6 are allocated to a footprint | Yes: a computed allocation rule, not a source value (section Land-only shapes) |
+| DAT footprints: the polygons rated EF0 to EF5 that a linked line touches are cut into zones by the highest rating (union and difference of polygons); a polygon that is invalid is repaired for this computation only | 6,072 polygons, 3,048 tornadoes, 4,813 zones; 0 polygons repaired; polygons not used: 1,464 with another `efscale` and 254 with no date (they stay in `dat_polygons`) | Yes: merging polygons and repairing invalid geometry; the shipped polygons are not changed |
 | `zcta_centroids`: longitude and latitude are as computed (not rounded) | 98,932 rows | Nothing is rounded |
 | `zcta_centroids`: the geometric centroid of a ZCTA with no residents is replaced by a point on the polygon surface when it falls outside the polygon | 5 of 342 ZCTAs with no residents (sum over the three boundary years) | Yes: a computed centroid, not a source value; the type is `geometric` |
 | Population: a block with an `NA` population stops the build | 0 `NA` ZCTA populations; the 2020 block field `POP20` is `NA` for 0 blocks | Nothing is replaced |
 | Population: a duplicated GEOID in a block file stops the build | 0 duplicated GEOIDs in 27,592,804 blocks | Nothing is dropped |
-| Population: the share of a block inside a path is not capped; the build stops if it is above 1 by more than 1e-9 | 454,038 path-block pieces; 29,385 above 1 (largest 1.00000000008, floating-point error) | Nothing is capped |
+| Population: the share of the land of a block covered by a footprint zone, and every area share, is not capped; the build stops if it is above 1 by more than 1e-9 | 167,060 zone-block pieces; the largest share is 1.00000000017 | Nothing is capped |
 | Population: a block whose internal point lies in more than one ZCTA keeps only its first ZCTA (`!duplicated(GEOID)`) | 5 blocks (5 rows dropped) in 2000: 2, 2010: 3, 2020: 0 | Not allowed under the fidelity rule without approval: reported to the maintainer |
 | DAT features: every feature of the three layers is kept, all fields, full resolution, in the service's spatial reference; no generalization, simplification, date filter, swath filter or field selection | points 241,456, lines 13,021, polygons 11,172 (equal to the counts the service reported); 2 empty point, 21 empty line and 185 empty polygon geometries and 41 + 1 + 254 features without a date are kept | Nothing is changed |
 | DAT dates: the text of milliseconds since 1970 is stored as a number (same value) and a `_utc` column is added | 13 added columns | Yes: type conversion without loss; the raw values are kept |
@@ -64,9 +70,9 @@ The aim of the package is the highest quality of data on tornadoes, changed as l
 | `tornado_dat_link` and `dat_polygon_line_link` are computed on copies of the geometries projected to EPSG:5070; a polygon that is invalid is repaired for the computation only | 0 polygons repaired; the shipped features are not repaired | Yes: projection and repairing invalid geometry |
 | Maps and boundary distances use the full TIGER/Line boundaries, not the generalized cartographic files | every map and every `boundary_dist_km` call | Nothing is generalized |
 
-**The modeled path is not a damage boundary at fine scales.** A modeled path is a straight line from SPC's start to SPC's end, drawn at SPC's single width. It does not follow the curve of a real path or its changing width, so it is not a damage boundary at scales finer than a kilometer: for the 11,369 SPC line tornadoes linked to a DAT line, the largest distance from a vertex of the DAT centerline to the SPC line has a median of 0.23 km and a 90th percentile of 1.78 km, by length of the SPC line: under 5 miles (7,981 links): median 0.11 km, 90th percentile 0.90 km; 5 to 20 miles (2,955 links): median 0.63 km, 90th percentile 1.98 km; over 20 miles (433 links): median 1.90 km, 90th percentile 4.82 km.
+**The SPC line is not a damage boundary at fine scales.** The SPC line is a straight line from SPC's start to SPC's end. It does not follow the curve of a real path, so it is not the path of the damage at scales finer than a kilometer: for the 11,369 SPC line tornadoes linked to a DAT line, the largest distance from a vertex of the DAT centerline to the SPC line has a median of 0.23 km and a 90th percentile of 1.78 km, by length of the SPC line: under 5 miles (7,981 links): median 0.11 km, 90th percentile 0.90 km; 5 to 20 miles (2,955 links): median 0.63 km, 90th percentile 1.98 km; over 20 miles (433 links): median 1.90 km, 90th percentile 4.82 km.
 
-**Area basis.** `modeled_area_prop` is the modeled intersection with the full ZCTA polygon divided by the area of that polygon, so numerator and denominator come from the same geometry and the proportion cannot exceed 1 except by floating-point error. The Census land area (`ALAND`) is shipped as `zcta_land_area_m2`; the ZCTA polygons include inland and coastal water, so the polygon area is larger than the land area: it differs by more than 1% in 18,929 of 57,754 rows and by more than 10% in 2,335. The package does not ship a land-only area share.
+**Area basis.** The DAT area shares divide by the area of the land-only shape of the unit (the unit polygon minus the Census water polygons), so numerator and denominator come from the same geometry and a share cannot exceed 1 except by floating-point error. The Census land area (`ALAND`) is shipped as `zcta_land_area_m2` and the polygon area as `zcta_polygon_area_m2`; the ZCTA polygons include inland and coastal water, so the polygon area is larger than the land area: it differs by more than 1% in 18,819 of 57,407 rows and by more than 10% in 2,326.
 
 **NCEI.** NCEI's Storm Events database is built from the same NWS Storm Data as SPC and is not independent of it. For 23,874 SPC tornadoes of 2007 to 2025 matched to NCEI events (within 2 km of the SPC line, within a day) the rating is equal for 99.64 percent (`data-raw/qa/54b_ncei_comparison.R`).
 
@@ -75,31 +81,127 @@ The aim of the package is the highest quality of data on tornadoes, changed as l
 <!-- loss:start -->
 ## Property loss (SPC `loss`)
 
-* SPC loss of 0 means unknown, not $0 (NOAA's wording), so `property_loss_tornado_total` and `modeled_property_loss_allocated` are `NA` for those tornadoes (the raw value 0 stays in `tornado_tracks$loss_raw`). 19,567 of 38,027 tornadoes (51.5%) become `NA`: 7,418 of 13,865 in 1996-2006 (53.5%) and 12,149 of 24,162 from 2007 (50.3%). In `tornado_exposure` that is 25,426 of 57,754 rows (44.0%; 19,104 of the 37,383 tornadoes with rows). For tornadoes with a known loss and a modeled path the allocated values sum to the total; for the others they are `NA`.
+* SPC loss of 0 means unknown, not $0 (NOAA's wording), so `property_loss_tornado_total` and `property_loss_allocated` are `NA` for those tornadoes (the raw value 0 stays in `tornado_tracks$loss_raw`). 19,567 of 38,027 tornadoes (51.5%) become `NA`: 7,418 of 13,865 in 1996-2006 (53.5%) and 12,149 of 24,162 from 2007 (50.3%). In `tornado_exposure` that is 25,563 of 57,407 rows (44.5%; 19,103 of the 37,382 tornadoes with rows). For tornadoes with a known loss and an SPC row the allocated values sum to the total; for the others, and for the rows that only the NWS polygons expose, they are `NA`.
 * Loss is incomplete even for the deadliest tornadoes. Since 2007, 28 of 108 EF4 and EF5 tornadoes have no loss recorded (`NA`), and 3 of 29 tornadoes with at least 10 deaths (10 deaths is a cut-off chosen to show the deadliest tornadoes, not a tested choice). The Mayfield tornado `2021_2112102054-01` (57 deaths, 515 injuries) has loss 25,000 dollars.
 * Units: nonzero values are in millions of dollars through 2006 (yearly median at most 0.07, maximum 1,000) and whole dollars from 2007 (yearly median at least 50,000). The pipeline multiplies 1996-2006 by one million (an exact conversion; the build stops if a result is not a whole number of dollars up to floating-point error), keeps the raw value in `tornado_tracks$loss_raw` with `loss_raw_unit`, and stops if the break moves (limits in the table of constants below). SPC re-coded 2007-2015 from millions to dollars between its 2024 and 2025 releases, so it can change again.
-* Loss of the 644 tornadoes that touch no ZCTA is not allocated: 56,387,000 dollars (181 tornadoes with loss above 0), 0.129% of all loss.
-* The allocation of a tornado's loss to its ZCTAs (`modeled_property_loss_allocated`) uses the modeled area share, so it is an approximation (section Modeled columns). It is `NA` for the 10,249 rows of tornadoes with no modeled path.
+* Loss of the 645 tornadoes with no SPC row is not allocated: 56,387,000 dollars (181 tornadoes with loss above 0), 0.129% of all loss.
+* The allocation of a tornado's loss to its ZCTAs (`property_loss_allocated`) uses the share of the SPC line in each ZCTA, so it assumes that damage is spread evenly along the line and is an approximation (section SPC exposure). It is `NA` for the 724 rows that only the NWS polygons expose.
 <!-- loss:end -->
 
 <!-- coordinates:start -->
 ## Coordinates
 
-* SPC gives 1996-2006 coordinates to 0.01 degrees (about 1.1 km of latitude); from 2007 to 0.0001 degrees (about 11 m). The package does not round or move any coordinate. A simulation that moves each coordinate by up to half its rounding step (20 replicates, 1,000 tornadoes per era: sample sizes of this simulation, not tested choices; points keep the ZCTA that contains the start, lines use the modeled path) changes the set of ZCTAs for 4.2% of 1996-2006 tornadoes per replicate (13.9% in at least one replicate) but 0.23% from 2007 (0.9% in at least one). A sensitivity analysis restricted to 2007 onward is recommended.
+* SPC gives 1996-2006 coordinates to 0.01 degrees (about 1.1 km of latitude); from 2007 to 0.0001 degrees (about 11 m). The package does not round or move any coordinate. A simulation that moves each coordinate by up to half its rounding step (20 replicates, 1,000 tornadoes per era: sample sizes of this simulation, not tested choices; points keep the ZCTA that contains the start, lines use the ZCTAs the straight line crosses) changes the set of ZCTAs for 7.0% of 1996-2006 tornadoes per replicate (23.9% in at least one replicate) but 0.16% from 2007 (0.7% in at least one). A sensitivity analysis restricted to 2007 onward is recommended.
 * From 2007 the reported length is close to the straight-line distance (`len_ratio` is above 1.5 for 1.1% of line tracks from 2007 against 21.9% in 1996-2006), which suggests that it is computed from the coordinates, so `len_ratio` cannot independently validate modern coordinates.
 <!-- coordinates:end -->
 
-<!-- modeled:start -->
-## Modeled columns (the `modeled_*` columns of `tornado_exposure`)
+<!-- spc-line:start -->
+## SPC exposure (`spc_exposed`, `line_km_in_zcta`, `line_share_of_tornado`, `property_loss_allocated`)
 
-SPC records only a start point, an end point and one width for each tornado, so the modeled path is the straight line between the two points, buffered by half the width. Real tornado paths curve and their width varies along the track. A tornado with no usable end point has no modeled path, and neither has a line with a width of 0 or missing: their `modeled_*` columns are `NA`.
+SPC records only a start point, an end point and one width for each tornado. The package draws only the straight line between the two points (straight in EPSG:5070) and builds no polygon from the width. Real tornado paths curve and their width varies along the track, and SPC's coordinates are rounded (section Coordinates). A ZCTA is exposed when a positive length of the line lies in it; a ZCTA that the line only touches at a point (zero length) is not exposed (0 line-ZCTA pairs in the build, counted in `out/process_tracks.log`). A tornado with no usable end point is a point at its start and exposes the ZCTA that contains the start point; a start point that lies in no ZCTA gives no SPC row.
 
-**What SPC's width means.** NWS instructions for Storm Data define the path width entered for a tornado as the maximum width. NWSI 10-1605 ([current text, 26 July 2021](https://www.weather.gov/media/directives/010_pdfs/pd01016005curr.pdf)), section 47.7 "Determining Path Length and Width": "Path length (in miles and tenths of miles) and maximum path width (in yards) will be indicated for all tornadoes, including each member of families of tornadoes, or for all segments of multi-segmented tornadoes." The archived text of 6 January 2003 ([archived appendix](https://www.weather.gov/media/directives/010_pdfs_archived/pd01016005a_incomplete.pdf)), section 31 "Tornado (C)": "Path width in the entry header is the maximum width over the entire path, or of each segment in a multi-segment tornado." SPC compiles its database from Storm Data. SPC's current description ([SPC_severe_database_description.pdf](https://www.spc.noaa.gov/wcm/data/SPC_severe_database_description.pdf)) gives only "Width in yards", and an older SPC format document ([torforma.doc](https://www.spc.noaa.gov/wcm/torforma.doc)) describes a mean width ("Mean tornado path width ... The mean width along the entire track is reported"). This package treats `wid` as the maximum width.
+**Line length and share.** `line_share_of_tornado` is the length of the line in the ZCTA divided by the length of the line in all the ZCTAs it reaches (both measured in EPSG:5070), so it sums to 1 over the SPC rows of a tornado; it is 1 for a point tornado. `line_km_in_zcta` is that share times `line_km`, the length of the whole line measured on the sphere (the measure that also gives `len_ratio`); for the 27,643 lines the 5070 length is between 0.9610 and 1.0401 times the spherical length (1st to 99th percentile 0.9927 to 1.0082). `line_km_outside_zcta` (in `tornado_tracks`) is `line_km` minus the kilometers in ZCTAs: 1,548 lines have more than 1e-6 km of their length in no ZCTA (water, areas that the Census assigns to no ZCTA; smaller values are floating-point residue, the largest is 4.3e-14 km).
 
-**Comparison with the NWS damage polygons.** For the 2,947 line tornadoes with a modeled path and a usable damage swath (`data-raw/qa/66_modeled_vs_dat.R`; the comparison swath of a linked DAT line is the union of the full-resolution polygons that cross the line on a date within one day, are rated EF0 to EF5, and have at least 90% of their area within SPC's width plus 500 m of the line, and it is usable when it lies within 200 m of at least half of the line; these four settings define which polygons count as this tornado's and change the comparison, not any shipped data), the modeled path area is a median of 1.18 times the area of the swath (10th to 90th percentile 0.41 to 2.03), consistent with a maximum width held along the whole path where the real width varies. Per tornado and ZCTA present in both, the modeled area share is 1.21 times the share computed from the polygons (0.37 to 2.99) and the modeled resident share 1.16 times (0.29 to 3.60); the two sets of ZCTAs agree for 91.7% (pairs in both over pairs in either). The modeled columns are noisy for any single tornado and are approximations, not a damage boundary. The accuracy of the NWS polygons has not been measured.
+**What SPC's width means.** NWS instructions for Storm Data define the path width entered for a tornado as the maximum width. NWSI 10-1605 ([current text, 26 July 2021](https://www.weather.gov/media/directives/010_pdfs/pd01016005curr.pdf)), section 47.7 "Determining Path Length and Width": "Path length (in miles and tenths of miles) and maximum path width (in yards) will be indicated for all tornadoes, including each member of families of tornadoes, or for all segments of multi-segmented tornadoes." The archived text of 6 January 2003 ([archived appendix](https://www.weather.gov/media/directives/010_pdfs_archived/pd01016005a_incomplete.pdf)), section 31 "Tornado (C)": "Path width in the entry header is the maximum width over the entire path, or of each segment in a multi-segment tornado." SPC compiles its database from Storm Data. SPC's current description ([SPC_severe_database_description.pdf](https://www.spc.noaa.gov/wcm/data/SPC_severe_database_description.pdf)) gives only "Width in yards". The package keeps `wid_yd` as given (a width of 0 is not replaced) and does not use it to draw anything.
 
-**Position.** For the 11,369 SPC line tornadoes linked to a DAT line, the largest distance from a vertex of the DAT centerline to the SPC line has a median of 0.23 km and a 90th percentile of 1.78 km (`data-raw/qa/46_path_accuracy.R`; every link counts, whatever its distance). By length of the SPC line: under 5 miles (7,981 links): median 0.11 km, 90th percentile 0.90 km; 5 to 20 miles (2,955 links): median 0.63 km, 90th percentile 1.98 km; over 20 miles (433 links): median 1.90 km, 90th percentile 4.82 km. A distance threshold smaller than these values cannot separate exposure from path-location error.
-<!-- modeled:end -->
+**Comparison with the NWS damage polygons.** For the 3,042 tornadoes with a linked DAT line and at least one linked EF0 to EF5 polygon (`data-raw/qa/66_spc_vs_dat.R`), the SPC line and the polygons expose the same ZCTA in 5,896 tornado-ZCTA pairs, the line alone in 245 and the polygons alone in 724; the two sets agree for 85.9% (pairs in both over pairs in either), 86.0% for line tornadoes and 58.5% for the 25 tornadoes with no usable end point. Per tornado the median agreement is 100.0%; 2,643 tornadoes have identical sets and 7 have no ZCTA in common. The ZCTAs exposed only by the polygons are 6.80 km (median), 125.49 km (90th percentile) and 386.43 km (largest) from the SPC line. The accuracy of the NWS polygons has not been measured.
+
+**Position.** For the 11,369 SPC line tornadoes linked to a DAT line, the largest distance from a vertex of the DAT centerline to the SPC line has a median of 0.23 km and a 90th percentile of 1.78 km (`data-raw/qa/46_path_accuracy.R`; every link counts, whatever its distance). By length of the SPC line: under 5 miles (7,981 links): median 0.11 km, 90th percentile 0.90 km; 5 to 20 miles (2,955 links): median 0.63 km, 90th percentile 1.98 km; over 20 miles (433 links): median 1.90 km, 90th percentile 4.82 km. A distance radius smaller than these values cannot separate exposure from path-location error.
+<!-- spc-line:end -->
+
+<!-- land:start -->
+## Land-only shapes
+
+Areas that are shares of a unit (the DAT area shares of `tornado_exposure`, `dat_exposure_tract` and `dat_exposure_blockgroup`) use land-only shapes: the unit polygon minus the Census water polygons (TIGER/Line AREAWATER, one file per county; TIGER2020 for the 2020 boundary year and TIGER2010 for the 2010 and 2000 boundary years, `data-raw/provenance_water.csv`) that lie inside it, computed in EPSG:5070 (`data-raw/land_functions.R`). Nothing is simplified or rounded: a land-only shape is the unit polygon with the part inside a water polygon removed. Invalid polygons are repaired with `st_make_valid()` and counted below.
+
+**ZCTAs against the Census land area (`ALAND`).** The ratio is the area of the land-only shape divided by `ALAND`, for every ZCTA of each boundary year (3,234 water files, 1,138 MB for 2020; 3,234 files, 1,132 MB for 2010 and 2000; 2,256,912 and 2,302,418 water polygons, of which 0 were invalid and repaired; the ZCTA polygons repaired: 2000: 0, 2010: 1, 2020: 0):
+
+| Boundary year | ZCTAs | With a water polygon inside | Ratio, 1st percentile | Ratio, median | Ratio, 99th percentile | Smallest ratio | Within 1% | Within 5% | Within 10% | More than 1% apart |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 2000 | 32,038 | 28,528 | 0.9914 | 1.0000000 | 1.0000104 | 0.602 | 99.12% | 99.88% | 99.96% | 281 |
+| 2010 | 33,120 | 29,217 | 0.9912 | 1.0000000 | 1.0000099 | 0.613 | 99.10% | 99.85% | 99.95% | 298 |
+| 2020 | 33,791 | 29,352 | 0.9926 | 1.0000000 | 1.0000032 | 0.462 | 99.25% | 99.88% | 99.96% | 252 |
+
+The land-only shape reproduces `ALAND` for 99.25% of the 2020 ZCTAs within 1%. The ZCTAs that differ by more than 1% (831 in all three boundary years, listed in `data-raw/qa/out/land_zcta_over1pct.csv`) are those where the Census counts water-feature area as land (dry lakes, tidal and coastal areas) or the reverse. The 20 largest differences in the 2020 boundary year:
+
+| ZCTA | Census land area (m2) | Land-only shape (m2) | Ratio |
+|---|---|---|---|
+| 93562 | 231,804,783 | 107,158,060 | 0.462 |
+| 99664 | 6,962,779,342 | 4,705,907,658 | 0.676 |
+| 99801 | 5,699,104,433 | 4,139,486,125 | 0.726 |
+| 93549 | 1,280,714,042 | 1,031,109,357 | 0.805 |
+| 99566 | 24,385,142,667 | 20,174,007,173 | 0.827 |
+| 01944 | 23,904,339 | 20,127,933 | 0.842 |
+| 37134 | 101,323,916 | 85,712,691 | 0.846 |
+| 92262 | 90,928,556 | 77,633,061 | 0.854 |
+| 99568 | 2,277,443,276 | 1,946,403,653 | 0.855 |
+| 38113 | 39,208,091 | 33,861,415 | 0.864 |
+| 96104 | 616,682,391 | 537,628,430 | 0.872 |
+| 37086 | 64,173,213 | 56,347,845 | 0.878 |
+| 96110 | 305,476,121 | 269,330,249 | 0.882 |
+| 99573 | 9,898,716,754 | 8,852,867,535 | 0.894 |
+| 99574 | 8,526,432,958 | 7,679,622,470 | 0.901 |
+| 98304 | 863,750,382 | 778,457,282 | 0.901 |
+| 85323 | 45,943,633 | 41,831,712 | 0.911 |
+| 98391 | 99,368,539 | 90,960,110 | 0.915 |
+| 72073 | 294,486,363 | 273,049,725 | 0.927 |
+| 32949 | 43,523,098 | 40,454,073 | 0.929 |
+
+**Blocks against the block land area.** The same ratio for every block of the census tracts that the DAT footprints reach (the blocks of the tracts and block groups tables; the ratio is the land-only shape divided by the block's `ALAND`):
+
+| Boundary year | Blocks of the tracts reached | Median ratio | Within 1% | Within 5% | Within 10% | More than 1% apart | More than 10% apart | No Census land, land shape above 0 | Land shape zero, residents above 0 |
+|---|---|---|---|---|---|---|---|---|---|
+| 2000 | 2,248 | 1.0000000 | 100.00% | 100.00% | 100.00% | 0 | 0 | 0 | 0 |
+| 2010 | 627,152 | 1.0000000 | 99.77% | 99.93% | 99.97% | 1,331 | 180 | 0 | 0 |
+| 2020 | 659,441 | 1.0000000 | 99.65% | 99.92% | 99.97% | 2,224 | 162 | 0 | 52 |
+
+**Rule.** Residents are allocated by the share of each block's land-only shape that a footprint zone covers (people live on land), because the land-only block shape reproduces the block `ALAND` within 1% for 99.71% of these blocks and within 5% for 99.93%. The area shares of tracts and block groups divide by the sum of the land-only shapes of their blocks (the blocks of a tract or block group are the blocks with the same GEOID prefix).
+
+**Blocks with no land.** A block whose land-only shape has an area of at most 0.001 square meters is treated as having no land: the subtraction leaves floating-point residue where a block boundary and a water boundary coincide (the largest residue is 1.37e-05 square meters; the smallest land-only shape of a block with Census land area is 1.11 square meters). 59,298 of the 1,288,841 blocks of the tracts the footprints reach have no land, 27 of them with a Census land area above 0. 52 of them hold residents (526 residents): these are allocated by the share of the block polygon that a zone covers (15 zone-block pieces, 32.6 residents in all). They take no part in the area shares.
+<!-- land:end -->
+
+<!-- dat-exposure:start -->
+## DAT columns, tract and block-group tables
+
+**Rule.** A DAT polygon belongs to a tornado when a DAT line linked to the tornado (`tornado_dat_link`) touches it (`dat_polygon_line_link`, `line_share_in_polygon` above 0: a zero test, not a cutoff; the share is the length of the line inside the polygon over the length of the line, computed on the polygon repaired with `st_make_valid()` where invalid). Only polygons rated EF0 to EF5 are used; a polygon with any other `efscale` stays in `dat_polygons` and is not used. A polygon with no date (254 of 11,172) is never linked, and a polygon with an empty geometry (185) touches nothing; both stay in `dat_polygons`. The rule is the same for every tornado and has no parameter.
+
+**Counts.** 6,571 tornado-polygon pairs touch a linked line: 6,150 are rated EF0 to EF5 (6,072 polygons, 3,048 tornadoes) and 421 have another `efscale` (343 polygons; 1,464 of the 11,172 polygons in `dat_polygons` have an `efscale` other than EF0 to EF5):
+
+| efscale of a touching polygon that is not used | Pairs |
+|---|---|
+| EFU | 7 |
+| N/A | 1 |
+| TSTM/Wind | 319 |
+| UNKNOWN | 94 |
+
+**Zones.** The polygons of different ratings overlap, so each tornado's footprint is cut into 4,813 zones by the highest rating that covers each part (a zone is the union of the polygons of one rating minus the union of the polygons rated higher); the zones do not overlap, so their areas add up to the area of the union and each part is counted once. 0 polygons were invalid and are repaired with `st_make_valid()` for this computation only (the shipped polygons are not repaired).
+
+**Footprints with no ZCTA row.** 3,048 tornadoes have a footprint; 3,042 of them have at least one ZCTA with polygon land. The other 6 have zones that cover no land of any ZCTA of their boundary year (areas the ZCTA files do not cover); 4 of those have rows in `dat_exposure_tract` and `dat_exposure_blockgroup`, and 2 have no row in any table (the zones cover no land).
+
+**Rows.** 56,683 rows are exposed by the SPC line; the linked polygons cover land in 6,620 tornado-ZCTA pairs, 5,896 of them also exposed by the line and 724 only by the polygons (`spc_exposed` `FALSE`; 289 tornadoes; the distance from the SPC line to their boundary has a median of 6.80 km, a 90th percentile of 125.49 km and a maximum of 386.43 km). 12,934 rows of linked tornadoes are exposed only by the line (`dat_exposed` `FALSE`, area and residents 0). Rows and tornadoes of the three tables:
+
+| Table | Rows | Tornadoes |
+|---|---|---|
+| `tornado_exposure` | 57,407 | 37,382 |
+| `dat_exposure_tract` | 8,005 | 3,046 |
+| `dat_exposure_blockgroup` | 12,308 | 3,046 |
+
+**By rating** (a part of the footprint is given the highest rating that covers it):
+
+| Rating | Tornado-ZCTA rows with area | Residents |
+|---|---|---|
+| EF0 | 4,728 | 1,441,764 |
+| EF1 | 3,642 | 793,846 |
+| EF2 | 1,222 | 135,408 |
+| EF3 | 446 | 61,063 |
+| EF4 | 108 | 29,246 |
+| EF5 | 2 | 25 |
+
+**Residents.** 2,461,351 residents are in the covered land of the rows of `tornado_exposure`; 0 more reside in blocks assigned to a ZCTA that has no row for the tornado, and 1 in blocks assigned to no ZCTA (they appear in the tract and block-group tables). The share of the land of a block covered by a zone is at most 1.00000000017 and no share is capped.
+
+**Damage points.** 214,212 damage-point counts (a point counts once for each tornado within a day) are in the rows of linked tornadoes; the counts cover only the ZCTAs, tracts and block groups that have a row for the tornado. Points are counted by `efscale` as entered (`EF0` to `EF5`, `EFU`, `TSTM/Wind`, and all other values or none in `dat_points_other`). A point dated within a day of a tornado can belong to another tornado: `other_tornadoes_in_zcta_within_a_day` counts the other SPC tornadoes whose line crosses the ZCTA within a day.
+
+<!-- dat-exposure:end -->
 
 <!-- dat:start -->
 ## NWS damage-survey data (DAT)
@@ -167,7 +269,26 @@ The National Weather Service surveyed it as two separate tornadoes from one stor
 
 **What the package holds.** The DAT lines are in `dat_lines` and are both linked to the one SPC record in `tornado_dat_link`: DAT line 2671572 (EF1, 11.64 miles, width 0 yards; rule `mutual_closest`, index-aligned distance 8.99 km, one-sided distance 1.29 km, length ratio 0.50); DAT line 2671973 (EF3, 12.29 miles, width 3,168 yards; rule `attached_to_paired`, index-aligned distance 9.11 km, one-sided distance 1.48 km, length ratio 0.53). Relationship `one_to_many`. The damage polygons that touch these lines (`dat_polygon_line_link`, `line_share_in_polygon` above 0) number 9 (ratings EF0 3, EF1 3, EF2 1, EF3 2). `map_exposure()` draws the SPC line over the two DAT tornadoes (the call is in the README).
 
-**Exposure.** The modeled path touches 14 ZCTAs (10 in Missouri, 4 in Illinois); the modeled path area is 58.3 km2 for the SPC width of 1,750 yards.
+**Exposure.** The SPC line (36.6 km; 0.0 km of it lie in no ZCTA) crosses 12 ZCTAs (8 in Missouri, 4 in Illinois). The linked NWS polygons (EF1 and EF3) cover land in 13 ZCTAs; 9 are exposed by both, 3 only by the SPC line and 4 only by the NWS polygons (`spc_exposed` is `FALSE` there, and their SPC columns are `NA` except the distances). The polygons cover 6.80 percent of the land of the ZCTAs they reach, and 54,458 residents (EF3 part: 671, EF1 part: 25,550), by the highest rating that covers each part. 11,010 NWS damage points lie in these ZCTAs within a day. The table gives each ZCTA:
+
+| ZCTA | SPC line | NWS polygons | Residents | Points | Boundary distance |
+|---|---|---|---|---|---|
+| 62025 | 8.22 km (share 0.225) | 0.0079 of the land (EF3 0.0000, EF1 0.0008) | 338 | 54 | 0.00 km |
+| 62026 | 1.47 km (share 0.040) | 0.0034 of the land (EF3 0.0000, EF1 0.0000) | 0 | 1 | 0.00 km |
+| 62040 | 9.70 km (share 0.265) | 0.0622 of the land (EF3 0.0000, EF1 0.0225) | 5,427 | 485 | 0.00 km |
+| 62048 | 3.59 km (share 0.098) | 0.0150 of the land (EF3 0.0000, EF1 0.0128) | 0 | 10 | 0.00 km |
+| 63105 | 1.61 km (share 0.044) | 0.4490 of the land (EF3 0.0000, EF1 0.3187) | 9,564 | 400 | 0.00 km |
+| 63112 | 2.27 km (share 0.062) | 0.5447 of the land (EF3 0.0000, EF1 0.3244) | 10,558 | 870 | 0.00 km |
+| 63115 | 2.64 km (share 0.072) | 0.5154 of the land (EF3 0.0110, EF1 0.2043) | 12,135 | 3803 | 0.00 km |
+| 63120 | 0.72 km (share 0.020) | no | 0 | 0 | 0.00 km |
+| 63124 | 0.05 km (share 0.001) | no | 0 | 7 | 0.00 km |
+| 63130 | 3.18 km (share 0.087) | 0.0333 of the land (EF3 0.0000, EF1 0.0078) | 316 | 40 | 0.00 km |
+| 63133 | 0.51 km (share 0.014) | no | 0 | 0 | 0.00 km |
+| 63147 | 2.65 km (share 0.072) | 0.2105 of the land (EF3 0.0000, EF1 0.1326) | 16 | 98 | 0.00 km |
+| 63107 | no | 0.2913 of the land (EF3 0.0000, EF1 0.1719) | 2,583 | 859 | 1.84 km |
+| 63108 | no | 0.3921 of the land (EF3 0.0015, EF1 0.1872) | 5,966 | 1339 | 1.82 km |
+| 63110 | no | 0.0910 of the land (EF3 0.0000, EF1 0.0487) | 29 | 78 | 1.66 km |
+| 63113 | no | 0.6530 of the land (EF3 0.0693, EF1 0.3286) | 7,527 | 2966 | 0.60 km |
 
 **NCEI.** NCEI's Storm Events database has three events for it: event 1262242 (ILLINOIS, EF1, 14.31 miles, 1035 yards); event 1262206 (MISSOURI, EF2, 2.3 miles, 500 yards); event 1262207 (MISSOURI, EF0, 6.61 miles, 1750 yards). NCEI is built from the same NWS Storm Data as SPC and is not independent.
 
@@ -177,7 +298,7 @@ A check of this case is in `data-raw/qa/check_data_integrity.R`.
 <!-- no-end-point:start -->
 ## Tornadoes with no usable end point
 
-A tornado has no usable end point when SPC's end coordinates are missing, equal to 0, or equal to the start coordinates. 10,384 of the 38,027 tornadoes (27.3%) are of this kind (10,383 have an end equal to the start, 1 an end of 0 or missing). 7,849 of them (75.6%) are from 1996 to 2006 and 2,535 (24.4%) from 2007 on. The package draws each as a POINT at the start (`track_type = "point"`), keeps SPC's raw coordinates, length and width, and models no path shape: the `modeled_*` columns are `NA` (the real path has an unknown direction and may extend up to the reported length from the start). In `tornado_exposure` such a tornado has one row, the ZCTA that contains the start point; 412 start points lie in no ZCTA and have no row.
+A tornado has no usable end point when SPC's end coordinates are missing, equal to 0, or equal to the start coordinates. 10,384 of the 38,027 tornadoes (27.3%) are of this kind (10,383 have an end equal to the start, 1 an end of 0 or missing). 7,849 of them (75.6%) are from 1996 to 2006 and 2,535 (24.4%) from 2007 on. The package draws each as a POINT at the start (`track_type = "point"`), keeps SPC's raw coordinates, length and width, and exposes only the ZCTA that contains the start point (the real path has an unknown direction and may extend up to the reported length from the start; `line_km_in_zcta` is `NA`). In `tornado_exposure` such a tornado has one SPC row, the ZCTA that contains the start point; 412 start points lie in no ZCTA and have no SPC row.
 
 **By rating.**
 
@@ -230,16 +351,13 @@ A tornado has no usable end point when SPC's end coordinates are missing, equal 
 <!-- distance:start -->
 ## Exposure definitions and distance exposure
 
-A call uses one exposure definition. The *touched* definition (the default) returns the ZCTAs that the modeled path polygon overlaps, that a positive length of the SPC line lies in when SPC gives no width, or that contain the start point of a tornado with no usable end point. `area_thresh` and `pop_thresh` apply to the `modeled_*` shares and do not evaluate tornadoes with no modeled path. `centroid_dist_km` and `boundary_dist_km` are measured from the SPC line (the start point for a tornado with no usable end point) and have no upper limit.
+A call uses one exposure definition. The default returns the rows of `tornado_exposure`: the ZCTAs that a positive length of the SPC line lies in (the ZCTA that contains the start point, for a tornado with no usable end point) and the ZCTAs in which a linked NWS polygon covers land. `centroid_dist_km` and `boundary_dist_km` are measured from the SPC line (the start point for a tornado with no usable end point) and have no upper limit; a ZCTA with a positive `boundary_dist_km` is not crossed by the line.
 
-**Joplin, Missouri, 22 May 2011** (`2011_1105221634-01`, EF5, 3 ZCTAs touched: 64804 64840 64844), with the ZCTAs starting with 647, 648 or 649 (the radii and thresholds are examples, not recommendations):
+**Joplin, Missouri, 22 May 2011** (`2011_1105221634-01`, EF5, 3 ZCTAs crossed by the SPC line: 64804 64840 64844), with the ZCTAs starting with 647, 648 or 649 (the radii are examples, not recommendations):
 
 | Definition | ZCTAs | ZCTA codes |
 |---|---|---|
-| touched (default) | 3 | 64804 64840 64844 |
-| area_thresh = 0.05 | 2 | 64804 64840 |
-| area_thresh = 0.1 | 1 | 64840 |
-| pop_thresh = 0.05 | 2 | 64804 64840 |
+| exposed (default) | 3 | 64804 64840 64844 |
 | centroid_dist_km = 1 | 0 |  |
 | centroid_dist_km = 5 | 2 | 64804 64840 |
 | centroid_dist_km = 10 | 5 | 64801 64804 64840 64841 64844 |
@@ -248,21 +366,21 @@ A call uses one exposure definition. The *touched* definition (the default) retu
 
 **Nationwide centroid-distance query** (every tornado, every ZCTA of each boundary year, one core; `seconds` is the time of the query and is the basis of the time estimate that `get_data()` prints for large requests):
 
-| Radius (km) | Tornado-ZCTA rows | Tornadoes without a row | Seconds | Touched pairs with the centroid within the radius | Rows that are not touched pairs |
+| Radius (km) | Tornado-ZCTA rows | Tornadoes without a row | Seconds | SPC-exposed pairs with the centroid within the radius | Rows that are not SPC-exposed pairs |
 |---|---|---|---|---|---|
-| 1 | 4,843 | 33,767 | 5 | 8.1% | 3.9% |
-| 5 | 36,736 | 16,408 | 11 | 45.0% | 29.2% |
-| 10 | 103,695 | 5,419 | 25 | 76.0% | 57.7% |
-| 25 | 504,343 | 343 | 100 | 98.0% | 88.8% |
-| 50 | 1,774,382 | 13 | 340 | 99.8% | 96.8% |
+| 1 | 4,843 | 33,767 | 5 | 8.2% | 4.6% |
+| 5 | 36,736 | 16,408 | 11 | 45.4% | 30.0% |
+| 10 | 103,695 | 5,419 | 25 | 76.3% | 58.3% |
+| 25 | 504,343 | 343 | 110 | 98.0% | 89.0% |
+| 50 | 1,774,382 | 13 | 354 | 99.8% | 96.8% |
 
-The result of a centroid-distance call is not a superset of the touched set: a large ZCTA crossed at its edge can have a centroid farther than the radius, as the share of touched pairs within each radius shows. The distance from the SPC line to the centroid is measured in a projection that suits the region (EPSG:5070 in the 48 states, EPSG:3338 in Alaska, ESRI:102007 in Hawaii, EPSG:32161 in Puerto Rico).
+The result of a centroid-distance call is not a superset of the SPC-exposed set: a large ZCTA crossed at its edge can have a centroid farther than the radius, as the share of exposed pairs within each radius shows. The distance from the SPC line to the centroid is measured in a projection that suits the region (EPSG:5070 in the 48 states, EPSG:3338 in Alaska, ESRI:102007 in Hawaii, EPSG:32161 in Puerto Rico).
 <!-- distance:end -->
 
 <!-- population:start -->
-## Population (`modeled_pop_affected`, `zcta_pop`, `modeled_pop_prop`)
+## Population (`zcta_pop`, `dat_pop_affected` and the tract and block-group residents)
 
-`modeled_pop_affected` is the estimated number of residents (total population, all ages) inside the modeled path within a ZCTA. Each census block of the ZCTA vintage keeps its population, which is allocated to the path by the share of the block's area inside the path (uniform density within a block, water included in the block polygon). Blocks are assigned to ZCTAs by their internal points, and `zcta_pop` is the sum of the populations of the blocks assigned to a ZCTA. Population is fixed at the census year within each decade (2000 blocks for years before 2010, 2010 blocks for 2010 to 2019, 2020 blocks from 2020). Sources: TIGER/Line tabulation blocks, with population from field `POP20` (2020) or the Census PL 94-171 redistricting files (2010 and 2000); URLs, sizes and checksums are in `data-raw/provenance_population.csv`.
+`zcta_pop` is the sum of the populations of the census blocks assigned to a ZCTA (total population, all ages), with blocks assigned to ZCTAs by their internal points. `dat_pop_affected` and its parts by rating are the residents in the land covered by the linked NWS polygons: each block keeps its population, which is allocated by the share of the block's land-only shape that the polygons cover (uniform density on the land of a block), and the residents of the blocks assigned to a ZCTA are added up. Tract and block-group residents are the sums over the blocks of the unit (the first 11 or 12 digits of the block GEOID). Population is fixed at the census year within each decade (2000 blocks for years before 2010, 2010 blocks for 2010 to 2019, 2020 blocks from 2020). Sources: TIGER/Line tabulation blocks, with population from field `POP20` (2020) or the Census PL 94-171 redistricting files (2010 and 2000); URLs, sizes and checksums are in `data-raw/provenance_population.csv`.
 
 | Vintage | Blocks | Resident population in the blocks | Blocks assigned to no ZCTA | Residents in those blocks |
 |---|---|---|---|---|
@@ -279,37 +397,27 @@ The result of a centroid-distance call is not a superset of the touched set: a l
 | Vintage | State | Blocks sampled | Assigned to a ZCTA | Assigned: at least 99% of area inside the ZCTA | Assigned: minimum share inside | Unassigned: blocks sampled | Unassigned: share with at most 1% of area inside any ZCTA |
 |---|---|---|---|---|---|---|---|
 | 2000 | CA | 4,000 | 3,767 | 100.00% | 1.000 | 233 | 100.0% |
-| 2000 | IL | 4,000 | 3,973 | 100.00% | 1.000 | 27 | 100.0% |
-| 2000 | MA | 4,000 | 3,937 | 100.00% | 1.000 | 63 | 100.0% |
-| 2000 | MO | 4,000 | 3,963 | 100.00% | 1.000 | 37 | 100.0% |
-| 2000 | NJ | 4,000 | 3,913 | 100.00% | 1.000 | 87 | 100.0% |
-| 2000 | TX | 4,000 | 3,739 | 100.00% | 1.000 | 261 | 100.0% |
+| 2000 | IL | 4,000 | 3,954 | 100.00% | 1.000 | 46 | 100.0% |
+| 2000 | MA | 4,000 | 3,926 | 100.00% | 1.000 | 74 | 100.0% |
+| 2000 | MO | 4,000 | 3,970 | 100.00% | 1.000 | 30 | 100.0% |
+| 2000 | NJ | 4,000 | 3,924 | 100.00% | 1.000 | 76 | 100.0% |
+| 2000 | TX | 4,000 | 3,738 | 100.00% | 1.000 | 262 | 100.0% |
 | 2010 | CA | 4,000 | 3,729 | 100.00% | 1.000 | 271 | 100.0% |
 | 2010 | IL | 4,000 | 3,982 | 100.00% | 1.000 | 18 | 100.0% |
 | 2010 | MA | 4,000 | 3,979 | 100.00% | 1.000 | 21 | 100.0% |
 | 2010 | MO | 4,000 | 4,000 | 100.00% | 1.000 | 0 | n/a |
 | 2010 | NJ | 4,000 | 3,964 | 100.00% | 1.000 | 36 | 100.0% |
-| 2010 | TX | 4,000 | 3,817 | 100.00% | 1.000 | 183 | 100.0% |
-| 2020 | CA | 4,000 | 3,835 | 100.00% | 1.000 | 165 | 100.0% |
-| 2020 | IL | 4,000 | 3,998 | 100.00% | 1.000 | 2 | 100.0% |
-| 2020 | MA | 4,000 | 3,986 | 100.00% | 1.000 | 14 | 100.0% |
+| 2010 | TX | 4,000 | 3,820 | 100.00% | 1.000 | 180 | 100.0% |
+| 2020 | CA | 4,000 | 3,863 | 100.00% | 1.000 | 137 | 100.0% |
+| 2020 | IL | 4,000 | 4,000 | 100.00% | 1.000 | 0 | n/a |
+| 2020 | MA | 4,000 | 3,987 | 100.00% | 1.000 | 13 | 100.0% |
 | 2020 | MO | 4,000 | 4,000 | 100.00% | 1.000 | 0 | n/a |
-| 2020 | NJ | 4,000 | 3,992 | 100.00% | 1.000 | 8 | 100.0% |
-| 2020 | TX | 4,000 | 3,896 | 100.00% | 1.000 | 104 | 100.0% |
+| 2020 | NJ | 4,000 | 3,995 | 100.00% | 1.000 | 5 | 100.0% |
+| 2020 | TX | 4,000 | 3,904 | 100.00% | 1.000 | 96 | 100.0% |
 
-**Integrity.** `modeled_pop_affected` never exceeds `zcta_pop`, `modeled_pop_prop` is not capped and is at most 1 (any excess over 1 is floating-point error), and for every tornado the residents in the exposure rows plus the residents in blocks assigned to no ZCTA equal the residents in the modeled path. `modeled_pop_prop` is `NA` for 23 rows (`zcta_pop` is 0). Its median is 0.00064, its 90th percentile 0.0206 and its 99th percentile 0.168; 3,060 rows (6.4%) have `modeled_pop_affected` 0.
+**Blocks whose internal point lies in two ZCTAs.** 5 blocks (all blocks of the three boundary years, `52b_block_validity_duplicates.R`) have an internal point on the boundary of two ZCTAs; the assignment keeps the first ZCTA (`!duplicated(GEOID)`), which the fidelity rule does not allow without approval, so it is reported (section What is and is not done to the source data).
 
-**Joplin (`2011_1105221634-01`).** The modeled path holds 4,411 residents (64804: 3,521; 64840: 760; 64844: 129). No survey GIS exists for Joplin. The straight modeled path can sit kilometers from the real one (see Modeled columns), and the residents it holds depend strongly on its sideways position: shifting the modeled polygon sideways changes them from 1,213 to 14,031 (3.2 times the unshifted 4,411, reached at a shift of 3.5 km to the left of the direction of travel, about north, toward the Joplin city center, which is about 5 km north of the modeled centerline). The unshifted estimate is therefore very uncertain, and a path displaced to the north would hold several times more residents; without a survey the true figure cannot be determined.
-
-**Block versus block group, tornadoes from 2020 on** (the minimum residents of 1, 100 and 1,000 are a span chosen to show how the comparison changes with the size of the population; "within 25%" and "within a factor of 2" describe the comparison and are not tested choices). The Census Bureau adds noise to 2020 block counts (differential privacy) and recommends aggregating. The residents in the modeled path computed from block groups instead of blocks (block-group population allocated by area share):
-
-| Residents in the path (blocks) at least | Tornadoes | Median block-group / block | Interquartile range | Within 25% | Within a factor of 2 | Rank correlation |
-|---|---|---|---|---|---|---|
-| 1 | 4,887 | 0.99 | 0.68 to 1.51 | 36.2% | 69.8% | 0.902 |
-| 100 | 1,281 | 0.92 | 0.71 to 1.09 | 56.4% | 85.6% | 0.904 |
-| 1,000 | 279 | 0.94 | 0.85 to 1.02 | 83.2% | 97.5% | 0.942 |
-
-This shows how much the uniform-density assumption and the block resolution matter; it is not a measurement of the noise itself, which cannot be isolated without noise-free data.
+**Integrity of the residents.** For the 19,554 rows of the 10,659 linked tornadoes, `dat_pop_affected` never exceeds `zcta_pop` (up to floating-point error), the parts by rating add up to the total, and no share of a block is capped: the largest share of the land of a block covered by a polygon zone is 1.00000000017 (the build stops above 1 by more than 1e-9). The blocks of the tracts that the footprints reach number 1,288,841 (167,060 polygon-block pieces); 52 blocks have residents and no land in their land-only shape (their 526 residents are allocated by the share of the block polygon covered, section Land-only shapes). Residents in a block assigned to a ZCTA that has no row for the tornado (the polygons cover land in the block's tract but no land in the ZCTA) are not in `tornado_exposure`: 0 residents in all; residents in blocks assigned to no ZCTA: 1. 2020 block counts have disclosure-avoidance noise added by the Census Bureau, which is larger for small areas.
 <!-- population:end -->
 
 ## 2020 block populations contain added noise
@@ -337,24 +445,24 @@ Every notice found about the DAT data (`dat_points`, `dat_lines`, `dat_polygons`
 <!-- no-zcta:start -->
 ## Tornadoes without a ZCTA
 
-644 of 38,027 tornadoes (1.69%) touch no ZCTA of their Census boundary year (the modeled path polygon overlaps none, the SPC line lies in none, or the start point lies in none), so they have no rows in `tornado_exposure`. They stay in `tornado_tracks`, and their property loss is not assigned to any ZCTA. They fall in three categories, defined by rules:
+645 of 38,027 tornadoes (1.70%) have no SPC row in tornado_exposure (the SPC line crosses no ZCTA of their Census boundary year, or the start point lies in none). 645 of them have no row at all; the others have rows that only linked NWS polygons expose (`spc_exposed` `FALSE`). They stay in `tornado_tracks`, and their property loss is not assigned to any ZCTA. They fall in three categories, defined by rules:
 
 * **Over water** (115): the track does not touch state land in the Census cartographic boundary file of the states (2020, 1:500,000).
 * **Over land, no ZCTA nearby** (397): the track touches state land, and more than 50% of the land within 3 km of the path is not covered by any ZCTA of the tornado's boundary year (median share of that land not covered: 91%). The 3 km and 50% are values chosen to describe the cases, not tested choices.
-* **On land, mostly covered** (132): the track touches state land, and at most 50% of the land within 3 km of the path is not covered (median share not covered: 35%).
+* **On land, mostly covered** (133): the track touches state land, and at most 50% of the land within 3 km of the path is not covered (median share not covered: 35%).
 
-**By Census boundary year** (2000: 471, 2010: 119, 2020: 54) **and track type** (232 line, 412 point):
+**By Census boundary year** (2000: 472, 2010: 119, 2020: 54) **and track type** (233 line, 412 point):
 
 | Census boundary year | over water | over land, no ZCTA nearby | on land, mostly covered | Total |
 |---|---|---|---|---|
-| 2000 | 113 | 243 | 115 | 471 |
+| 2000 | 113 | 243 | 116 | 472 |
 | 2010 |   2 | 104 |  13 | 119 |
 | 2020 |   0 |  50 |   4 |  54 |
 
 | Track type | over water | over land, no ZCTA nearby | on land, mostly covered | Total |
 |---|---|---|---|---|
 | point | 104 | 192 | 116 | 412 |
-| line |  11 | 205 |  16 | 232 |
+| line |  11 | 205 |  17 | 233 |
 
 **By state** (start point, top 10 of the states and territories):
 
@@ -370,17 +478,17 @@ Every notice found about the DAT data (`dat_points`, `dat_lines`, `dat_polygons`
 | OK |  0 |  10 |  5 |  15 |
 | WI |  0 |  12 |  3 |  15 |
 | CA |  0 |   7 |  7 |  14 |
-| all other (36 states and territories) | 36 |  86 | 47 | 169 |
+| all other (36 states and territories) | 36 |  86 | 48 | 170 |
 
 **Why there is no ZCTA.** The Census Bureau says that "Uninhabited areas (land and water areas) over two square miles are potentially left unassigned from 2020 ZCTA coverage" (https://www.census.gov/programs-surveys/geography/guidance/geo-areas/zctas.html). For the tornadoes of the 2020 boundary year, the connected area around the path that no ZCTA covers (measured in a window of 15 km around the path, so it can be larger) is shown below; the statement was checked for the 2020 file only, and the same numbers are given for the other boundary years without any claim about them.
 
 | Census boundary year | Tornadoes | Uncovered area around the path over 2 square miles | Share | Median uncovered area (square miles) |
 |---|---|---|---|---|
-| 2000 | 471 | 412 | 99.0% | 172.6 |
+| 2000 | 472 | 412 | 99.0% | 172.6 |
 | 2010 | 119 | 119 | 100.0% | 156.4 |
 | 2020 |  54 | 53 | 100.0% | 179.8 |
 
-**The 2000 file leaves out large water bodies.** The total area of the ZCTA polygons divided by the total land area was 1.010 in the 2000 file, against 1.023 in 2010 and 1.023 in 2020, and 327 of the 471 tornadoes without a ZCTA in the 2000 boundary year (69.4%) overlap a ZCTA of the 2010 or 2020 file:
+**The 2000 file leaves out large water bodies.** The total area of the ZCTA polygons divided by the total land area was 1.010 in the 2000 file, against 1.023 in 2010 and 1.023 in 2020, and 328 of the 472 tornadoes without a ZCTA in the 2000 boundary year (69.5%) overlap a ZCTA of the 2010 or 2020 file:
 
 | Census boundary year | ZCTA polygon area (million km2) | Land area ALAND (million km2) | Polygon area divided by land area |
 |---|---|---|---|
@@ -390,34 +498,34 @@ Every notice found about the DAT data (`dat_points`, `dat_lines`, `dat_polygons`
 
 | Census boundary year | Tornadoes | Overlap a ZCTA of another boundary year | Share |
 |---|---|---|---|
-| 2000 | 471 | 327 | 69.4% |
+| 2000 | 472 | 328 | 69.5% |
 | 2010 | 119 |  79 | 66.4% |
 | 2020 |  54 |  39 | 72.2% |
 
-**On land, mostly covered: a sample of 20 of the 132.** Of all 132, 116 have no usable end point (they are points), 56 lie within 100 m of a ZCTA and 119 within 500 m (median 131 m), 123 overlap a ZCTA of another boundary year, and the median uncovered area around the path is NA square miles (4 of them below 2 square miles). What is going on: these are mostly short or point paths (narrow polygons) that lie a short distance from the edge of a ZCTA, next to an unassigned area, and most land nearby is covered, so the polygon falls just outside the ZCTA edge; the ZCTA is close but the path polygon does not reach it. The same path overlaps a ZCTA of another boundary year in most cases, so the gap depends on the boundary file. The sample (random, seed 20):
+**On land, mostly covered: a sample of 20 of the 133.** Of all 133, 116 have no usable end point (they are points), 57 lie within 100 m of a ZCTA and 120 within 500 m (median 130 m), 124 overlap a ZCTA of another boundary year, and the median uncovered area around the path is NA square miles (4 of them below 2 square miles). What is going on: these are mostly short or point paths (narrow polygons) that lie a short distance from the edge of a ZCTA, next to an unassigned area, and most land nearby is covered, so the polygon falls just outside the ZCTA edge; the ZCTA is close but the path polygon does not reach it. The same path overlaps a ZCTA of another boundary year in most cases, so the gap depends on the boundary file. The sample (random, seed 20):
 
 | Tornado | State | Track type | Length (mi) | Width (yd) | Distance to nearest ZCTA (m) | Land within 3 km not covered | Uncovered area around the path (square miles) | Overlaps a ZCTA of another boundary year |
 |---|---|---|---|---|---|---|---|---|
-| 2008_0811052012-01 | OK | point | 0.50 |  75 |   6 | 30% | NA | yes |
-| 2014_1405310830-01 | SC | line | 0.11 |  30 |  10 | 0% | 165.70 | yes |
-| 2021_2112052024-01 | KY | line | 0.29 |  25 | 425 | 22% | 16.01 | yes |
-| 2006_69 | CA | point | 0.20 |  15 |  54 | 2% | 172.35 | yes |
-| 1998_34 | IA | point | 0.20 |  30 |   4 | 5% | NA | yes |
-| 2005_192 | OK | point | 0.10 |  30 |  42 | 40% | NA | yes |
-| 2001_789 | IA | point | 0.60 |  35 |   0 | 4% | NA | yes |
-| 2000_270 | AR | point | 2.00 |  30 | 184 | 44% | NA | yes |
-| 1999_553 | AL | point | 0.10 |  50 |  29 | 1% | NA | yes |
-| 2002_212 | MA | point | 0.40 |  75 |  30 | 1% | NA | yes |
-| 2001_262 | MN | point | 2.00 |  25 | 355 | 9% | 1.08 | yes |
-| 2015_1505191607-01 | TX | line | 0.76 | 100 | 226 | 50% | 215.60 | yes |
-| 2008_0806131210-01 | FL | point | 0.05 |  10 |   0 | 4% | NA | yes |
-| 1997_73 | TX | point | 0.20 |  20 | 362 | 43% | 58.73 | yes |
-| 2003_830 | TX | point | 0.30 | 100 | 756 | 43% | 27.36 | yes |
-| 2009_0905241412-01 | CO | point | 0.10 |  50 | 268 | 42% | 24.12 | yes |
-| 2001_1085 | TX | point | 0.50 |  30 |  41 | 5% | NA | yes |
-| 2000_1074 | FL | point | 0.50 |  80 |  68 | 22% | NA | yes |
-| 2003_1013 | KS | point | 0.10 |  80 | 505 | 34% | 17.18 | yes |
-| 2004_1606 | NC | point | 0.30 |  20 | 132 | 13% | 36.14 | yes |
+| 2007_0709221200-01 | CA | point | 0.10 |  15 |    3 | 9% | NA | yes |
+| 2012_1203171630-01 | CA | point | 0.01 |  50 |  311 | 27% | 73.34 | yes |
+| 2020_2003171525-01 | TX | line | 0.07 |  35 |  259 | 43% | 97.29 | yes |
+| 2006_1072 | FL | point | 0.30 |  50 |  125 | 37% | 29.86 | no |
+| 1998_34 | IA | point | 0.20 |  30 |    4 | 5% | NA | yes |
+| 2005_822 | IA | point | 0.10 |  25 | 1135 | 39% | 14.83 | yes |
+| 2001_789 | IA | point | 0.60 |  35 |    0 | 4% | NA | yes |
+| 2000_270 | AR | point | 2.00 |  30 |  184 | 44% | NA | yes |
+| 1999_553 | AL | point | 0.10 |  50 |   29 | 1% | NA | yes |
+| 2002_219 | AR | line | 1.50 |  50 |   11 | 46% | NA | yes |
+| 2001_262 | MN | point | 2.00 |  25 |  355 | 9% | 1.08 | yes |
+| 2014_1405310830-01 | SC | line | 0.11 |  30 |   10 | 0% | 165.70 | yes |
+| 2008_0801101310-01 | LA | point | 0.25 |  30 |    0 | 15% | NA | yes |
+| 1997_73 | TX | point | 0.20 |  20 |  362 | 43% | 58.73 | yes |
+| 2003_696 | TX | point | 1.50 |  50 |  362 | 43% | 59.85 | yes |
+| 2009_0911062330-01 | OR | point | 0.09 |  80 |    3 | 9% | NA | no |
+| 2001_1085 | TX | point | 0.50 |  30 |   41 | 5% | NA | yes |
+| 2000_1074 | FL | point | 0.50 |  80 |   68 | 22% | NA | yes |
+| 2003_830 | TX | point | 0.30 | 100 |  756 | 43% | 27.36 | yes |
+| 2004_216 | FL | point | 0.50 |  30 |  136 | 15% | 194.78 | yes |
 <!-- no-zcta:end -->
 
 ## ZCTA vintages
@@ -442,7 +550,7 @@ Define the overlap ratio of a code as the area of the intersection of its two po
 
 The official 2000 ZCTA list (Census Gazetteer) has 33,125 ZCTAs, but the 2000 boundary file has 32,038 polygons. 1,129 official ZCTAs have no polygon (and 42 polygons have no official entry). 329 of the missing codes are three-digit placeholders ending in `XX` (for example `997XX`), which stand for areas with no five-digit ZCTA. The missing ZCTAs hold 43,913 residents in the official counts (0.015% of the population; 870 have none and 761 have no land area), which matches the 43,957 residents in 2000 blocks assigned to no ZCTA, but 22.3% of the official land area (mostly a few very large placeholder areas in Alaska and Nevada).
 
-A tornado in such an area has no exposure row for it. To estimate how many 1996-2009 tornadoes are affected, each missing ZCTA was placed at its Gazetteer internal point, as a disc with the official land area (222 codes) or a point (629 codes with no land area); 278 have no coordinates and cannot be placed. By this estimate 310 of 17,863 tornadoes (1.74%) reach a missing ZCTA: 276 of them also have a row for another ZCTA, so they lose only a pair, and 34 are among the 471 tornadoes of the 2000 vintage that intersect no ZCTA. The real areas are irregular and a disc around one point only approximates them, so the count is approximate; no error bound was computed. The 2010 and 2020 files contain none of the missing codes.
+A tornado in such an area has no exposure row for it. To estimate how many 1996-2009 tornadoes are affected, each missing ZCTA was placed at its Gazetteer internal point, as a disc with the official land area (222 codes) or a point (629 codes with no land area); 278 have no coordinates and cannot be placed. By this estimate 310 of 17,863 tornadoes (1.74%) reach a missing ZCTA: 276 of them also have a row for another ZCTA, so they lose only a pair, and 34 are among the 472 tornadoes of the 2000 vintage that intersect no ZCTA. The real areas are irregular and a disc around one point only approximates them, so the count is approximate; no error bound was computed. The 2010 and 2020 files contain none of the missing codes.
 <!-- zcta2000-gap:end -->
 
 <!-- identifiers:start -->
@@ -509,8 +617,8 @@ Unknown ratings (`magnitude` is `NA`) are absent before 2007 (0 unknown ratings 
 ## Dependence on upstream data
 
 * The shipped data (`data/`) hold everything the functions need. Installing and using the package needs no upstream download, except that `map_exposure()` downloads boundaries from the Census Bureau (through tigris) when it runs and `get_data(boundary_dist_km = )` downloads the full TIGER/Line ZCTA file of the boundary year (the sizes are in the help pages).
-* A full rebuild reads the SPC tornado file (one URL, 9.2 MB), the full TIGER/Line ZCTA files for 2000, 2010 and 2020 (through tigris), and, for population, the Census TIGER/Line tabulation blocks (2020: 11.4 GB; 2010: 7.0 GB; 2000: 5.8 GB) and the PL 94-171 files (1.0 GB for 2010 and 0.4 GB for 2000), 26.4 GB in all (367 files, listed with size and md5 in `data-raw/provenance_population.csv`). The population downloads are cached outside the repository (see `pop_cache()` in `data-raw/population/population_functions.R`).
-* A yearly update (`data-raw/update_data.R`) is much smaller than a rebuild: the SPC file, the ZCTA boundary file of the boundary year and the tabulation blocks of the states that the new year's tornadoes touch; with the block results cached by `data-raw/add_population.R` only the blocks along the new paths are read. The DAT data are fetched whole again (`data-raw/dat/fetch_dat.R`, then `data-raw/dat/build_dat.R`): the service can change, so a rebuild can differ from the stored DAT datasets, and the link tables are rebuilt from the new fetch.
+* A full rebuild reads the SPC tornado file (one URL, 9.2 MB), the full TIGER/Line ZCTA files for 2000, 2010 and 2020 (through tigris), and, for population and land-only shapes, the Census TIGER/Line water polygons (2.3 GB, 6468 files, `data-raw/provenance_water.csv`) and the Census TIGER/Line tabulation blocks (2020: 11.4 GB; 2010: 7.0 GB; 2000: 5.8 GB) and the PL 94-171 files (1.0 GB for 2010 and 0.4 GB for 2000), 26.4 GB in all (367 files, listed with size and md5 in `data-raw/provenance_population.csv`). The population downloads are cached outside the repository (see `pop_cache()` in `data-raw/population/population_functions.R`).
+* A yearly update (`data-raw/update_data.R`) is much smaller than a rebuild: the SPC file and the ZCTA boundary file of the boundary year. The DAT data are fetched whole again (`data-raw/dat/fetch_dat.R`, then `data-raw/dat/build_dat.R` and `data-raw/dat/build_dat_exposure.R`, which reads the tabulation blocks of the states the DAT footprints touch and the water polygons): the service can change, so a rebuild can differ from the stored DAT datasets, and the link tables and DAT columns are rebuilt from the new fetch.
 * Raw downloads are not archived with the package or the repository, and are never committed. The md5 and size of each SPC download, with the years that came from it (`data-raw/provenance_years.csv`), the manifest of every population download and the software versions (`data-raw/provenance.txt`) let a rebuild check that it reads the same files; the DAT fetch is described by `data-raw/dat/fetch/fetch_summary.rds` (count the service reported, features read, size, time; git-ignored) and its date in `data-raw/dat/access_date.txt`.
 * Risk: a full rebuild depends on the Census Bureau, SPC and the DAT service keeping their URLs available and unchanged. If they move, disappear, or (for SPC and the DAT service) are revised, a rebuild will not reproduce the shipped data, although the shipped data stay valid. Yearly updates append only new years to the SPC tables and leave stored years frozen.
 <!-- dependence:end -->
@@ -526,8 +634,9 @@ Every constant in the code that is not a source value, with its definition, valu
 | loss break year, guard limits (`spc_clean()`) | the year SPC's loss changes from millions to dollars, and the yearly median and maximum limits that detect a moved break | 2007; median at most 1 and maximum at most 10,000 (millions) before; median at least 10,000 (dollars) from | the observed ranges (before 2007: median at most 0.07, maximum 1,000; from 2007: median at least 50,000) lie on both sides of the limits | the build stops if the break moves; no value changes |
 | exact-conversion tolerance (`spc_clean()`) | largest relative difference between the converted loss and a whole number of dollars | 1e-9 | floating-point error | the build stops if a value is not a whole number of dollars |
 | sanity limits of the update (`check_new_rows()`) | latitude, longitude, width, length, loss | latitude 15 to 72, longitude -180 to -60, width 0 to 10,000 yards, length 0 to 400 miles, known loss with a median of at least 10,000 and a maximum below 1e11 dollars | corrupt records fall outside; the extremes in the data lie well inside | the update stops and writes nothing; no value changes |
-| block share tolerance (`block_shares()`) | largest share of a block inside a path above 1 that is treated as floating-point error | 1e-9 | the largest share found is 1 plus floating-point error | the build stops above it; a share is never capped |
-| candidate-block margin (`pop_aff_cached()`) | distance by which the paths are buffered before choosing the blocks to intersect | 5 km | the paths are straight in EPSG:5070 but curved in longitude/latitude (up to about 1 km for the longest paths) | a block that a path touches is never missed (checked by `data-raw/qa/35_population_candidate_check.R`) |
+| share tolerance (`block_pass()`, `build_dat_exposure.R`) | largest share of the land of a block, ZCTA or unit covered by the footprint above 1 that is treated as floating-point error | 1e-9 | the largest share found is 1 plus floating-point error | the build stops above it; a share is never capped |
+| polygon rule (`footprint_pairs()`) | a DAT polygon belongs to a tornado when a linked line touches it, and only polygons rated EF0 to EF5 are used | `line_share_in_polygon` above 0; efscale EF0 to EF5 | a zero test, not a cutoff; the other values of `efscale` are not damage ratings | which polygons make up a tornado's footprint (section DAT columns) |
+| damage-point window (`build_dat_exposure.R`) | a damage point counts for a tornado when its UTC date is within this many days of the tornado's date | 1 day | the same window as the link, for the same reason | the `dat_points_*` columns |
 | link window (`data-raw/dat/pairing_functions.R`) | DAT lines and SPC tornadoes are candidates when dated within this many days | 1 day | SPC uses local dates and the DAT date is the UTC date of `stormdate`, so the same event can be a day apart | a line is linked only to a tornado within a day |
 | link sample points (`n_samples`) | equally spaced points along each path for the index-aligned distance | 21 | a point every 5% of the length | defines `index_aligned_dist_km` and `one_sided_dist_km` |
 | distance index factor (`.distance_pairs()`) | oversize factor of the buffer used to pick candidate pairs before exact distances | 1.05 | the index uses a buffer in a projection | no pair within the radius is missed; exact distances decide |
@@ -537,5 +646,5 @@ Every constant in the code that is not a source value, with its definition, valu
 <!-- unchecked:start -->
 ## Numbers that no script recomputes
 
-`data-raw/qa/check_documented_claims.R` matches 34 numbers or statements in the help pages, the README and the code against the data (the generated blocks of this file are written by the QA scripts from the data). In this file 63 numbers outside the generated blocks are not matched: quoted source text of external documents, dates and urls, and values read from external documents. They are listed in `data-raw/qa/out/numbers_without_a_script.csv` and are not checked by a script.
+`data-raw/qa/check_documented_claims.R` matches 42 numbers or statements in the help pages, the README and the code against the data (the generated blocks of this file are written by the QA scripts from the data). In this file 63 numbers outside the generated blocks are not matched: quoted source text of external documents, dates and urls, and values read from external documents. They are listed in `data-raw/qa/out/numbers_without_a_script.csv` and are not checked by a script.
 <!-- unchecked:end -->

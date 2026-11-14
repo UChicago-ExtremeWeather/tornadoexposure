@@ -10,7 +10,7 @@ put <- function(name, txt) { txt <- c(paste0("<!-- ", name, ":start -->"), txt, 
 wprov <- read.csv("data-raw/provenance_water.csv", stringsAsFactors = FALSE); prov <- read.csv("data-raw/provenance_years.csv", stringsAsFactors = FALSE); popr <- read.csv("data-raw/provenance_population.csv", stringsAsFactors = FALSE)
 
 # ---- intro ---------------------------------------------------------------------------------------------------------------------------------------
-put("intro", c("# Known issues in the source data and the model", "",
+put("intro", c("# Known issues in the source data and the derived tables", "",
  paste0("Numbers below were computed by the scripts in `data-raw/qa/` from the data built from the SPC file `1950-", max(yr), "_all_tornadoes.csv` (accessed ", prov$access_date[nrow(prov)], ", md5 and size in `provenance.txt`) and the NWS Damage Assessment Toolkit data queried on ", readLines("data-raw/dat/access_date.txt"), ". They describe the current build; run the scripts again after a data change. No data are changed to work around any of these items."), "",
  "**Terms used on this page.**", "",
  "* *Exposed*: a ZCTA is exposed by the SPC when the SPC line (the straight line from SPC's start point to its end point) crosses it, that is, a positive length of the line lies in it; for a tornado with no usable end point, when the ZCTA contains the start point. It is exposed by the NWS survey when a damage polygon of a linked NWS line covers some land in it.",
