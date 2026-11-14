@@ -24,7 +24,7 @@ generate_feature <- function(exposed_zctas,
 )
 
 .map_layers <- c("zcta", "tract", "block_group", "spc_tracks", "dat_lines",
-                 "dat_polygons", "dat_points", "spc_path")
+                 "dat_polygons", "dat_points")
 
 .year_label <- function(year_range) {
   if (min(year_range) == max(year_range)) {
@@ -60,7 +60,8 @@ generate_feature <- function(exposed_zctas,
 #'
 #' One map function. It takes the same arguments as [get_data()] and draws the
 #' layers named in `layers` for the tornadoes that `get_data()` returns. Everything is
-#' drawn as stored (projected to longitude and latitude, nothing simplified).
+#' drawn as stored (projected to longitude and latitude, nothing simplified). No
+#' polygon is drawn from SPC's width.
 #'
 #' Layers:
 #' * `"zcta"`, `"tract"`, `"block_group"`: full TIGER/Line boundaries of the Census
@@ -78,8 +79,6 @@ generate_feature <- function(exposed_zctas,
 #'   rating, including EFU and TSTM/Wind). The caption gives the link distances. The
 #'   linked selection is a display choice, not a data rule; the complete layers are
 #'   [dat_lines], [dat_polygons] and [dat_points].
-#' * `"spc_path"`: the modeled path rectangle, only on a map that also has a DAT layer,
-#'   labeled "modeled width, not a damage boundary".
 #'
 #' A message is printed when a request is large (more than 2,000 damage points) or
 #' needs a large boundary download.
@@ -89,8 +88,8 @@ generate_feature <- function(exposed_zctas,
 #'   tornadoes), `"magnitude"` (average magnitude), `"total_fatality"` or
 #'   `"total_injury"`. If `NULL` (default), the ZCTAs are not filled.
 #' @param layers Character vector of layers to draw, from `"zcta"`, `"tract"`,
-#'   `"block_group"`, `"spc_tracks"`, `"dat_lines"`, `"dat_polygons"`,
-#'   `"dat_points"` and `"spc_path"`. The default is `c("zcta", "spc_tracks")`.
+#'   `"block_group"`, `"spc_tracks"`, `"dat_lines"`, `"dat_polygons"` and
+#'   `"dat_points"`. The default is `c("zcta", "spc_tracks")`.
 #'
 #' @return A ggplot object.
 #'
@@ -105,7 +104,6 @@ generate_feature <- function(exposed_zctas,
 #' @export
 map_exposure <- function(geography = "zcta", geo_list, year_range,
                          feature = NULL, magnitude = c(0:5, NA),
-                         area_thresh = NULL, pop_thresh = NULL,
                          centroid_dist_km = NULL, boundary_dist_km = NULL,
                          layers = c("zcta", "spc_tracks")) {
   v <- .validate_args(
@@ -113,8 +111,7 @@ map_exposure <- function(geography = "zcta", geo_list, year_range,
     geo_list = if (missing(geo_list)) NULL else geo_list,
     year_range = if (missing(year_range)) NULL else year_range,
     magnitude = magnitude,
-    thresholds = list(area_thresh = area_thresh, pop_thresh = pop_thresh,
-                      centroid_dist_km = centroid_dist_km,
+    thresholds = list(centroid_dist_km = centroid_dist_km,
                       boundary_dist_km = boundary_dist_km)
   )
   if (!is.null(feature) &&
@@ -128,9 +125,6 @@ map_exposure <- function(geography = "zcta", geo_list, year_range,
     stop("layers must be from: ", paste0('"', .map_layers, '"', collapse = ", "), ".", call. = FALSE)
   }
   dat_layers <- intersect(layers, c("dat_lines", "dat_polygons", "dat_points"))
-  if ("spc_path" %in% layers && length(dat_layers) == 0L) {
-    stop('"spc_path" is drawn only on a comparison map: add "dat_lines", "dat_polygons" or "dat_points" to layers.', call. = FALSE)
-  }
   if (!is.null(feature) && "dat_polygons" %in% layers) {
     stop('feature fills the ZCTAs and "dat_polygons" fills the damage polygons; use one of them.', call. = FALSE)
   }
@@ -205,14 +199,6 @@ map_exposure <- function(geography = "zcta", geo_list, year_range,
     p <- p + ggplot2::geom_sf(data = sf::st_transform(dp, 4326), ggplot2::aes(fill = .data$efclass), color = NA, alpha = 0.45) +
       ggplot2::scale_fill_manual(values = .ef_colors, name = "NWS damage polygon (EF)", drop = TRUE)
   }
-  if ("spc_path" %in% layers && !is.null(tr)) {
-    hp <- !is.na(tr$modeled_path_area_m2)
-    if (any(hp)) {
-      rect <- sf::st_transform(.path_polygon(tr[hp, ], tr$wid_yd[hp]), 4326)
-      p <- p + ggplot2::geom_sf(data = rect, fill = NA, color = "grey30", linetype = "dashed", linewidth = 0.4)
-      caption <- paste(c(caption, "Dashed rectangle: modeled width, not a damage boundary"), collapse = "\n")
-    }
-  }
   if (!is.null(dl) && "dat_lines" %in% layers) {
     p <- p + ggplot2::geom_sf(data = sf::st_transform(dl, 4326), color = "#08519c", linewidth = 0.6)
   }
@@ -226,14 +212,12 @@ map_exposure <- function(geography = "zcta", geo_list, year_range,
     p <- p + .spc_layers(ln, pt)
   }
   title <- paste0("Tornado exposures, ", .year_label(v$year_range))
-  subtitle <- if (v$definition == "overlap") {
-    "Exposed = the tornado touched the ZCTA"
+  subtitle <- if (v$definition == "exposed") {
+    "Exposed = the SPC line crosses the ZCTA, or a linked NWS damage polygon covers land in it"
   } else if (v$definition == "centroid_dist_km") {
-    paste0("Exposed = ZCTA centroid within ", v$threshold, " km of the SPC line")
-  } else if (v$definition == "boundary_dist_km") {
-    paste0("Exposed = ZCTA boundary within ", v$threshold, " km of the SPC line")
+    paste0("ZCTA centroid within ", v$threshold, " km of the SPC line")
   } else {
-    paste0("Exposed = ", v$definition, " >= ", v$threshold)
+    paste0("ZCTA boundary within ", v$threshold, " km of the SPC line")
   }
   p + ggplot2::labs(title = title, subtitle = subtitle, caption = caption) + ggplot2::theme_void() +
     ggplot2::theme(plot.caption = ggplot2::element_text(hjust = 0, size = 7), plot.caption.position = "plot")

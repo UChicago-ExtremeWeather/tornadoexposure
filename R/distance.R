@@ -2,7 +2,7 @@
 # with no usable end point):
 #   centroid_dist_km  the population-weighted centroid of the ZCTA lies within this distance
 #   boundary_dist_km  the ZCTA's boundary (full TIGER/Line polygon) lies within this distance
-#                     (0 when the line touches the ZCTA)
+#                     (0 when the line crosses the ZCTA)
 # Nothing beyond the rows of tornado_exposure is precomputed: distances are computed on
 # demand from the stored tracks, the small zcta_centroids table and, for the boundary
 # distance, the full TIGER/Line ZCTA file.
@@ -112,7 +112,7 @@
 # log scales (and extends the last segment beyond 50 km), and scales with the
 # number of (track, ZCTA) combinations in the request. Only a rough guide: the times vary between runs and
 # data-raw/qa/check_documented_claims.R requires them to be within a factor of 2 of the latest measurement.
-.distance_timings <- data.frame(radius_km = c(1, 5, 10, 25, 50), seconds = c(5, 12, 28, 111, 343))
+.distance_timings <- data.frame(radius_km = c(1, 5, 10, 25, 50), seconds = c(5, 12, 26, 110, 373))
 .distance_seconds <- function(radius_km, n_tracks_by_vint, n_zcta_by_vint) {
   v <- names(n_tracks_by_vint)
   full_tracks <- .vint_counts(.vintage_of(as.integer(substr(.tracks()$tornado_id, 1, 4))))
@@ -139,35 +139,61 @@
 }
 
 .exposure_columns <- function() names(.exposure())
-.modeled_columns <- c("modeled_intersection_m2", "modeled_area_prop", "modeled_pop_affected",
-                      "modeled_pop_prop", "modeled_area_share_of_tornado", "modeled_property_loss_allocated")
+
+.dat_count_columns <- function() grep("^dat_points_", names(.exposure()), value = TRUE)
+
+# Attributes of the tornadoes of a request: tornado_id, date, magnitude, injuries, fatalities, loss, track type
+.track_attrs <- function(tracks) {
+  sf::st_drop_geometry(tracks)[, c("tornado_id", "date", "magnitude", "total_injury", "total_fatality", "property_loss_tornado_total", "track_type")]
+}
 
 # Assemble the output rows of a distance call.
 #   pairs    data frame with tornado_id, ZCTA, vintage and the distance columns that were measured
-#   attrs    one row per tornado: tornado_id, date, magnitude, total_injury,
-#            total_fatality, property_loss_tornado_total, track_type, has_shape
-#   overlap  stored overlap rows (tornado_exposure) with the modeled columns for pairs where
-#            the modeled path overlaps the ZCTA
+#   tracks   the tornadoes of the request (sf)
+#   stored   tornado_exposure
 #   cen      the centroid table
-# Pairs with no stored row (the modeled path does not overlap the ZCTA) get 0 for the modeled
-# columns when the tornado has a modeled path polygon and NA when it has none.
-.assemble_distance <- function(pairs, attrs, overlap, cen) {
-  out <- merge(pairs, attrs, by = "tornado_id", all.x = TRUE, sort = FALSE)
-  out <- merge(out, cen[, c("ZCTA", "vintage", "zcta_pop", "zcta_polygon_area_m2", "zcta_land_area_m2")], by = c("ZCTA", "vintage"), all.x = TRUE, sort = FALSE)
-  ov <- overlap[, c("tornado_id", "ZCTA", .modeled_columns)]
-  out <- merge(out, ov, by = c("tornado_id", "ZCTA"), all.x = TRUE, sort = FALSE)
-  none <- is.na(out$modeled_intersection_m2) & out$has_shape
-  out$modeled_intersection_m2[none] <- 0
-  out$modeled_area_prop[none] <- 0
-  out$modeled_area_share_of_tornado[none] <- 0
-  out$modeled_property_loss_allocated[none] <- ifelse(is.na(out$property_loss_tornado_total[none]), NA_real_, 0)
-  out$modeled_pop_affected[none] <- 0
-  out$modeled_pop_prop[none] <- ifelse(out$zcta_pop[none] > 0, 0, NA_real_)
-  out$year <- as.numeric(format(out$date, "%Y"))   # the types of tornado_exposure
-  out$month <- format(out$date, "%m")
-  out$day <- format(out$date, "%d")
-  out <- out[order(out$date, out$tornado_id, out$ZCTA), , drop = FALSE]
-  out
+# A pair that has a stored row (the ZCTA is exposed by the SPC line or by a linked DAT polygon) returns the stored row. A pair with no stored row is a ZCTA
+# that neither source exposes: spc_exposed is FALSE, the line is not in the ZCTA (0 km and share 0 for a line, NA for a point; allocated loss 0, or NA where the
+# tornado's loss is NA), and for a tornado with a linked DAT line dat_exposed is FALSE and the DAT area and resident columns are 0. The point counts and
+# other_tornadoes_in_zcta_within_a_day are not tabulated for ZCTAs that no source exposes (NA), and the distance that was not asked for is NA.
+.assemble_distance <- function(pairs, tracks, stored, cen) {
+  key <- paste(pairs$tornado_id, pairs$ZCTA); sk <- paste(stored$tornado_id, stored$ZCTA)
+  hit <- key %in% sk
+  old <- stored[match(key[hit], sk), , drop = FALSE]
+  new <- pairs[!hit, , drop = FALSE]
+  parts <- list(old)
+  if (nrow(new) > 0L) {
+    at <- .track_attrs(tracks)[match(new$tornado_id, tracks$tornado_id), ]
+    cc <- cen[match(paste(new$ZCTA, new$vintage), paste(cen$ZCTA, cen$vintage)), ]
+    ids <- .dat_line_ids()
+    linked <- new$tornado_id %in% names(ids)
+    n <- data.frame(tornado_id = new$tornado_id, date = at$date, stringsAsFactors = FALSE)
+    n$year <- as.numeric(format(at$date, "%Y")); n$month <- format(at$date, "%m"); n$day <- format(at$date, "%d")
+    n$magnitude <- at$magnitude; n$total_injury <- at$total_injury; n$total_fatality <- at$total_fatality
+    n$property_loss_tornado_total <- at$property_loss_tornado_total; n$track_type <- at$track_type; n$ZCTA <- new$ZCTA
+    n$spc_exposed <- FALSE
+    n$line_km_in_zcta <- ifelse(at$track_type == "line", 0, NA_real_)
+    n$line_share_of_tornado <- 0
+    n$property_loss_allocated <- ifelse(is.na(at$property_loss_tornado_total), NA_real_, 0)
+    n$centroid_dist_km <- if ("centroid_dist_km" %in% names(new)) new$centroid_dist_km else NA_real_
+    n$boundary_dist_km <- if ("boundary_dist_km" %in% names(new)) new$boundary_dist_km else NA_real_
+    n$zcta_pop <- as.numeric(cc$zcta_pop); n$zcta_land_area_m2 <- cc$zcta_land_area_m2
+    n$zcta_polygon_area_m2 <- cc$zcta_polygon_area_m2; n$zcta_land_shape_area_m2 <- cc$zcta_land_shape_area_m2
+    n$dat_linked <- linked; n$dat_line_ids <- unname(ids[new$tornado_id])
+    n$dat_exposed <- ifelse(linked, FALSE, NA)
+    zero <- function(x) ifelse(linked, x, NA_real_)
+    for (nm in grep("^dat_(area_share|pop)", names(stored), value = TRUE)) n[[nm]] <- zero(0)
+    for (nm in c(.dat_count_columns(), "other_tornadoes_in_zcta_within_a_day")) n[[nm]] <- NA_integer_
+    parts[[2]] <- n[, names(stored), drop = FALSE]
+  }
+  out <- do.call(rbind, parts)
+  out[order(out$date, out$tornado_id, out$ZCTA), , drop = FALSE]
+}
+
+# the linked DAT line ids of each tornado, as in the column dat_line_ids
+.dat_line_ids <- function() {
+  lk <- tornadoexposure::tornado_dat_link
+  vapply(split(lk$dat_line_id, lk$tornado_id), function(x) paste(sort(x), collapse = ";"), "")
 }
 
 .finish_distance <- function(out) {
@@ -198,13 +224,6 @@
   tracks[yr %in% v$year_range & tracks$magnitude %in% v$magnitude, ]
 }
 
-.track_attrs <- function(tracks) {
-  a <- sf::st_drop_geometry(tracks)[, c("tornado_id", "date", "magnitude", "total_injury", "total_fatality",
-                                         "property_loss_tornado_total", "track_type")]
-  a$has_shape <- !is.na(tracks$modeled_path_area_m2)
-  a
-}
-
 # SPC tracks: tornadoes in the request, with the centroid of each requested ZCTA within
 # v$threshold km of the SPC line (or start point)
 .select_distance <- function(v) {
@@ -222,10 +241,7 @@
       pairs <- data.frame(tornado_id = tracks$tornado_id[pr$i], ZCTA = cen$ZCTA[pr$j],
                           vintage = cen$vintage[pr$j], centroid_dist_km = pr$dist_km,
                           stringsAsFactors = FALSE)
-      ov <- .exposure()
-      pairs$boundary_dist_km <- ifelse(paste(pairs$tornado_id, pairs$ZCTA) %in% paste(ov$tornado_id, ov$ZCTA),
-                                       ov$boundary_dist_km[match(paste(pairs$tornado_id, pairs$ZCTA), paste(ov$tornado_id, ov$ZCTA))], NA_real_)
-      out <- .finish_distance(.assemble_distance(pairs, .track_attrs(tracks), ov, cen))
+      out <- .finish_distance(.assemble_distance(pairs, tracks, .exposure(), cen))
     }
   }
   if (nrow(out) == 0L) {
@@ -272,7 +288,7 @@
         cc <- cen[match(paste(pairs$ZCTA, pairs$vintage), paste(cen$ZCTA, cen$vintage)), ]
         has_cen <- !is.na(cc$lon); pairs <- pairs[has_cen, ]; cc <- cc[has_cen, ]   # ZCTAs outside the block data (Guam and others) have no centroid
         pairs$centroid_dist_km <- .track_centroid_dist(sf::st_geometry(tracks)[match(pairs$tornado_id, tracks$tornado_id)], cc$lon, cc$lat)
-        out <- .finish_distance(.assemble_distance(pairs, .track_attrs(tracks), .exposure(), cen))
+        out <- .finish_distance(.assemble_distance(pairs, tracks, .exposure(), cen))
       }
     }
   }

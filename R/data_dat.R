@@ -22,7 +22,7 @@
 #' The accuracy of the damage polygons has not been measured, positions are the survey teams', and surveys are not available for every tornado:
 #' coverage grows from a few tornadoes in 2007 to most tornadoes in 2025 (`data-raw/known_issues.md`).
 #'
-#' **Linking.** [tornado_dat_link] links the lines to SPC tornadoes and [dat_polygon_line_link] relates the polygons to the lines. Points are not linked to tornadoes by any rule.
+#' **Linking.** [tornado_dat_link] links the lines to SPC tornadoes and [dat_polygon_line_link] relates the polygons to the lines. Points are not linked to tornadoes by any rule; [tornado_exposure] counts the points that lie in a ZCTA within one day of a tornado.
 #'
 #' @format An sf data frame in EPSG:4326: `dat_points` has `r ncol(dat_points) - 1` columns plus geometry (POINT), `dat_lines` `r ncol(dat_lines) - 1` (LINESTRING) and `dat_polygons` `r ncol(dat_polygons) - 1` (POLYGON and MULTIPOLYGON).
 #'   The fields are those of the service; `objectid` identifies a feature within its layer.
@@ -111,3 +111,40 @@ NULL
 #' @source Built by `data-raw/dat/build_dat.R`.
 #' @seealso [dat_features], [tornado_dat_link]
 "dat_polygon_line_link"
+
+#' NWS damage polygons by tract and block group
+#'
+#' The NWS damage-survey columns of [tornado_exposure] at two finer Census units: `dat_exposure_tract` has `r format(nrow(dat_exposure_tract), big.mark = ",")` rows (one per tornado and census tract
+#' that a linked NWS damage polygon covers land in, `r format(length(unique(dat_exposure_tract$tornado_id)), big.mark = ",")` tornadoes) and `dat_exposure_blockgroup`
+#' has `r format(nrow(dat_exposure_blockgroup), big.mark = ",")` rows (block groups, `r format(length(unique(dat_exposure_blockgroup$tornado_id)), big.mark = ",")` tornadoes).
+#' There are no SPC columns: SPC's positions (a straight line from a start to an end point, rounded to 0.01 degrees before 2007) are not accurate enough to say which tract or
+#' block group a tornado crossed.
+#'
+#' @details
+#' The rules are those of the DAT columns of [tornado_exposure]: a polygon belongs to a tornado when a linked line touches it (`line_share_in_polygon` above 0 in [dat_polygon_line_link]), only polygons rated EF0 to EF5 are
+#' used, and every part of the footprint is given the highest rating that covers it, so the `_ef0` to `_ef5` columns sum to the total. Units use the Census boundary year of the tornado's year (2000 before 2010, 2010 for
+#' 2010 to 2019, 2020 from 2020), and the unit of a block is read from its GEOID: the first 11 digits are the tract and the first 12 the block group. Areas and residents come from the blocks of the unit: the land-only area of a unit
+#' is the sum of the land-only areas of its blocks (each block polygon minus the Census water polygons inside it), the share is the covered land divided by that area, and residents are each block's population
+#' times the share of the block's land-only shape covered. The point counts are the NWS damage points inside the unit's blocks dated within one day of the tornado.
+#'
+#' @format A data frame with the variables:
+#' \describe{
+#'   \item{tornado_id}{As in [tornado_exposure].}
+#'   \item{GEOID}{Census tract (11 characters) or block group (12 characters) code.}
+#'   \item{tract_pop, tract_land_area_m2, tract_land_shape_area_m2 (blockgroup_pop, blockgroup_land_area_m2, blockgroup_land_shape_area_m2 in `dat_exposure_blockgroup`)}{Population (sum of the blocks), Census land area (sum of the blocks' `ALAND`) and land-only area (sum of the blocks' land-only shapes, in square meters, EPSG:5070) of the unit.}
+#'   \item{dat_area_share, dat_area_share_ef0 to dat_area_share_ef5}{As in [tornado_exposure], for the unit's land-only area.}
+#'   \item{dat_pop_affected, dat_pop_ef0 to dat_pop_ef5}{As in [tornado_exposure], in residents.}
+#'   \item{dat_points_ef0 to dat_points_ef5, dat_points_efu, dat_points_wind, dat_points_other}{Counts of NWS damage points in the unit dated within one day of the tornado, by `efscale` as entered.}
+#' }
+#'
+#' @source Built by `data-raw/dat/build_dat_exposure.R` from [dat_polygons], [dat_points], [tornado_dat_link], [dat_polygon_line_link] and the Census Bureau TIGER/Line tabulation blocks and water polygons.
+#' @seealso [tornado_exposure], [dat_features]
+#' @name dat_exposure_units
+#' @aliases dat_exposure_tract dat_exposure_blockgroup
+NULL
+
+#' @rdname dat_exposure_units
+"dat_exposure_tract"
+
+#' @rdname dat_exposure_units
+"dat_exposure_blockgroup"

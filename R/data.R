@@ -1,33 +1,54 @@
 #' Tornado exposure by ZCTA
 #'
-#' One row per tornado and ZCTA for every tornado in the United States from
+#' One row per tornado and ZCTA that either source exposes, for the tornadoes of the United States from
 #' `r min(tornado_exposure$year)` to `r max(tornado_exposure$year)`:
 #' `r format(nrow(tornado_exposure), big.mark = ",")` rows covering
 #' `r format(length(unique(tornado_exposure$tornado_id)), big.mark = ",")`
 #' tornadoes. A ZCTA (ZIP Code Tabulation Area) is the Census Bureau's approximation of a ZIP code
-#' area. A tornado appears once for each ZCTA it touched:
-#' * a line track with a positive width touches the ZCTAs that its modeled path polygon overlaps (the straight line between SPC's
-#'   start and end points, widened to SPC's width);
-#' * a line track with a width of 0 or missing has no polygon; it touches the ZCTAs that a positive length of the line lies in;
-#' * a tornado with no usable end point is a point at its start (see [tornado_tracks]); it touches the ZCTA that contains the start point,
-#'   and has no row when the start point lies in no ZCTA.
+#' area. A row exists when
+#' * the SPC line crosses the ZCTA (`spc_exposed` is `TRUE`; `r format(sum(tornado_exposure$spc_exposed), big.mark = ",")` rows). A tornado with no usable end point is a point at
+#'   its start (see [tornado_tracks]); it is exposed in the ZCTA that contains the start point, and has no SPC row when the start point lies in no ZCTA; or
+#' * a damage polygon of a linked NWS damage-survey line covers some land in the ZCTA (`dat_exposed` is `TRUE`; `r format(sum(tornado_exposure$dat_exposed, na.rm = TRUE), big.mark = ",")` rows).
+#'   `r format(sum(!tornado_exposure$spc_exposed), big.mark = ",")` rows are exposed only by the NWS polygons: `spc_exposed` is `FALSE` and the SPC columns are `NA` except the distances.
 #'
 #' All ratings are included, EF0 to EF5 and unknown (see `magnitude`).
 #'
 #' @details
-#' **Modeled columns.** The columns that begin with `modeled_` come from the modeled path polygon: a straight line at SPC's single
-#' width. NWS instructions for Storm Data define the path width entered for a tornado as the maximum width over the entire path (or
-#' of each segment), SPC compiles its database from Storm Data, and this package treats `wid` as that maximum width
-#' (`data-raw/known_issues.md`, section Modeled columns, gives the source and the comparison with the NWS damage polygons). The width is applied along the whole track, so
-#' every modeled area and proportion is larger than that of the damage swath, most for long tracks whose width varied: for the
-#' tornadoes with a usable NWS damage swath (the damage polygons of the linked survey line; the comparison is defined in `data-raw/known_issues.md`), the modeled path area is a median of
-#' `r sprintf("%.2f", .doc_number("modeled_vs_dat_path_area_median"))` times the area of the NWS damage polygons
-#' (10th to 90th percentile `r sprintf("%.2f", .doc_number("modeled_vs_dat_path_area_p10"))` to `r sprintf("%.2f", .doc_number("modeled_vs_dat_path_area_p90"))`), the modeled area share of a ZCTA is
-#' `r sprintf("%.2f", .doc_number("modeled_vs_dat_area_share_median"))` times the share computed from the NWS polygons (`r sprintf("%.2f", .doc_number("modeled_vs_dat_area_share_p10"))` to `r sprintf("%.2f", .doc_number("modeled_vs_dat_area_share_p90"))`) and
-#' the modeled resident share `r sprintf("%.2f", .doc_number("modeled_vs_dat_pop_share_median"))` times (`r sprintf("%.2f", .doc_number("modeled_vs_dat_pop_share_p10"))` to `r sprintf("%.2f", .doc_number("modeled_vs_dat_pop_share_p90"))`). They are noisy for any single
-#' tornado and are approximations, not a damage boundary. SPC gives only a start and an end point, so each path is a straight
-#' line even though real tornadoes curve (section Modeled columns of `data-raw/known_issues.md`). The modeled columns are `NA` for the
-#' tornadoes with no modeled path shape (`track_type = "point"`, and lines with `wid_yd` of 0).
+#' **What the package draws.** SPC provides a start point, an end point and a width. The package draws only the straight line between the start and
+#' end points (straight in EPSG:5070) and builds no polygon from the width. The NWS damage polygons are the NWS's own survey shapes ([dat_polygons]).
+#'
+#' **SPC columns.** `line_km_in_zcta` is the length of the line inside the ZCTA in kilometers (`NA` for a point tornado): the share of the line in the ZCTA, measured in EPSG:5070,
+#' times the length of the whole line (`line_km` in [tornado_tracks], measured on the sphere). `line_share_of_tornado` is the length of the line in the ZCTA divided by
+#' the length of the line inside all the ZCTAs it reaches, so it sums to 1 over the SPC rows of a tornado (it is 1 for a point tornado). The kilometers of the line outside every ZCTA are
+#' `line_km_outside_zcta` in [tornado_tracks]. The line is exposed, not the damage: nothing here says where along the line damage occurred.
+#'
+#' **Property loss.** `property_loss_tornado_total` is the SPC `loss` for the whole tornado in nominal dollars (repeated on every row of the tornado; do not sum it across rows),
+#' and `property_loss_allocated` is that total times `line_share_of_tornado`, so a tornado's allocated values sum to its total over its SPC rows. It assumes that damage is spread
+#' evenly along the line, so it is an estimate, not a measurement. It is `NA` where the total is `NA` (SPC recorded 0 or no value, which NOAA says does not mean $0) and on rows
+#' that only the NWS polygons expose. SPC loss is incomplete even for the deadliest tornadoes: the Mayfield, Kentucky tornado of December 2021
+#' (`r tornado_tracks$total_fatality[tornado_tracks$tornado_id == "2021_2112102054-01"]`
+#' deaths) has a loss of
+#' `r format(tornado_tracks$property_loss_tornado_total[tornado_tracks$tornado_id == "2021_2112102054-01"], big.mark = ",")`
+#' dollars, and `r sum(is.na(tornado_tracks$property_loss_tornado_total) & !is.na(tornado_tracks$magnitude) & tornado_tracks$magnitude >= 4 & as.integer(substr(tornado_tracks$tornado_id, 1, 4)) >= 2007)`
+#' of the `r sum(!is.na(tornado_tracks$magnitude) & tornado_tracks$magnitude >= 4 & as.integer(substr(tornado_tracks$tornado_id, 1, 4)) >= 2007)`
+#' EF4 and EF5 tornadoes since 2007 have no loss recorded. SPC reports loss in millions of dollars through 2006 (converted here without rounding beyond floating-point error); the raw value and its unit
+#' are in [tornado_tracks] (`loss_raw`, `loss_raw_unit`).
+#'
+#' **DAT columns.** They describe the damage polygons of the NWS damage-survey lines linked to the tornado ([tornado_dat_link]) and are `NA` for a tornado with no linked line
+#' (`dat_linked` is `FALSE`). A polygon belongs to a tornado when a linked line touches it (`line_share_in_polygon` above 0 in [dat_polygon_line_link]: a zero test, not a cutoff). Only polygons
+#' rated EF0 to EF5 are used; polygons with another `efscale` stay in [dat_polygons] and are counted in `data-raw/known_issues.md`. Polygons with no date are never linked and are not used.
+#' The polygons of different ratings overlap, so for each tornado every part of the footprint is given the highest rating that covers it; `dat_area_share_ef0` to `dat_area_share_ef5` are the land shares
+#' whose highest rated polygon has that rating, and they sum to `dat_area_share`, the share of the ZCTA's land covered by the union of the tornado's polygons (each area counted once).
+#' `dat_pop_ef0` to `dat_pop_ef5` and `dat_pop_affected` are the same in residents. For a linked tornado the columns are 0 where no polygon covers land in the ZCTA.
+#'
+#' **Land-only shares.** Areas are land-only: the ZCTA polygon minus the Census water polygons (TIGER/Line AREAWATER) inside it (`zcta_land_shape_area_m2`; `data-raw/known_issues.md` compares it with the Census land area
+#' `zcta_land_area_m2`). Shares are at most 1 and are never capped. Residents are allocated from census blocks: each block's population times the share of the block's land-only shape covered
+#' (uniform density on the land of a block), assigned to the ZCTA that contains the block's internal point. Population is fixed at the census of the boundary year (below).
+#'
+#' **Damage points.** `dat_points_ef0` to `dat_points_ef5`, `dat_points_efu`, `dat_points_wind` and `dat_points_other` count the NWS damage points ([dat_points]) that lie in the ZCTA and are dated within one day of the
+#' tornado (UTC date of the point against the tornado's date), by `efscale` as entered: `EF0` to `EF5`, `EFU`, `TSTM/Wind`, and every other value or none. Points are not linked to tornadoes by any rule, so
+#' a point can belong to another tornado of the same day: `other_tornadoes_in_zcta_within_a_day` is the number of other SPC tornadoes whose line crosses the ZCTA within one day of this tornado. Points are counted only
+#' in the ZCTAs that have a row for the tornado.
 #'
 #' **Census boundary year.** The Census Bureau publishes ZCTA boundaries
 #' for the 2000, 2010 and 2020 censuses; each set of boundaries is called a Census boundary year here.
@@ -36,74 +57,19 @@
 #' 2019, and the 2020 file from 2020. The same ZCTA code can cover a different
 #' area in different boundary years, and the 2000 polygons omit large water bodies
 #' that the 2010 and 2020 polygons include (`data-raw/known_issues.md` gives the
-#' counts).
+#' counts). `zcta_pop` and the residents use the census of the boundary year (total population, all ages), and 2020 block counts have disclosure-avoidance noise added by the Census Bureau, which is larger for small areas.
 #'
-#' **Exposure.** A ZCTA is exposed to a tornado when the tornado touched it
-#' (any overlap, including very small touches). Thresholds on
-#' `modeled_area_prop` or `modeled_pop_prop` are applied to each tornado
-#' separately, not cumulatively across tornadoes. Area share depends on the size of
-#' the ZCTA as well as on how the path crossed it; population share follows where
-#' residents live.
-#'
-#' **Area.** `modeled_area_prop` is the modeled intersection divided by the area of the full ZCTA
-#' polygon (`zcta_polygon_area_m2`), with the same geometry in numerator and denominator. It is not capped. The Census land area
-#' (`ALAND`, `zcta_land_area_m2`) is returned too: the ZCTA polygon includes inland and coastal water that `ALAND` excludes, so the
-#' polygon is larger than the land area for ZCTAs with water.
-#'
-#' **Population.** `modeled_pop_affected` estimates the residents inside the modeled path within
-#' the ZCTA. It uses block-level total population (all ages, no age weights)
-#' from the census of the ZCTA
-#' boundary year: 2000 blocks for years before 2010, 2010 blocks for 2010 to 2019 and
-#' 2020 blocks from 2020, so population is fixed at the census year within each
-#' decade. Each block's population is allocated to the path by the share of the
-#' block's area inside the path (uniform density within a block; block polygons
-#' include any water in the block), and blocks are assigned to ZCTAs by their
-#' internal points (ZCTAs are built from whole blocks). `zcta_pop` is the sum of the
-#' populations of the blocks assigned to the ZCTA and is the denominator of
-#' `modeled_pop_prop`, which is `NA` for the
-#' `r format(sum(tornado_exposure$zcta_pop == 0 & !is.na(tornado_exposure$modeled_pop_affected)), big.mark = ",")` modeled rows where
-#' `zcta_pop` is 0. Two paths that cover the same share of a ZCTA's area can have very different
-#' `modeled_pop_prop`: a path through a dense town holds many residents, while one
-#' over farmland of the same area holds few. Limitations: the path is the
-#' straight-line path with one width applied along the whole track, and 2020 block counts have disclosure-avoidance noise added by
-#' the Census Bureau, which is larger for small areas.
-#'
-#' **Distances.** `boundary_dist_km` is the distance from the SPC line (the start point for a point tornado) to the
-#' ZCTA boundary of the boundary year: 0 when the line touches the ZCTA. Every row of this dataset is a ZCTA that the modeled path or
-#' the line touched, so the value is 0 except where the polygon, but not the line, reaches the ZCTA
-#' (`r format(sum(tornado_exposure$boundary_dist_km > 0), big.mark = ",")` rows). `centroid_dist_km` is the distance from the same line or
-#' point to the population-weighted centroid of the ZCTA ([zcta_centroids]). Both are in kilometers. For ZCTAs a tornado did not touch use
-#' `get_data(centroid_dist_km = ...)` or `get_data(boundary_dist_km = ...)`.
+#' **Distances.** `boundary_dist_km` is the distance from the SPC line (the start point for a point tornado) to the ZCTA boundary of the boundary year: 0 exactly where `spc_exposed` is `TRUE`.
+#' `centroid_dist_km` is the distance from the same line or point to the population-weighted centroid of the ZCTA ([zcta_centroids]). Both are in kilometers and are given for every row.
+#' A row with a positive distance is a ZCTA that the line does not cross; it is in the table because a linked NWS polygon covers land in it
+#' (`r format(sum(tornado_exposure$boundary_dist_km > 0), big.mark = ",")` rows). For other ZCTAs use `get_data(centroid_dist_km = ...)` or `get_data(boundary_dist_km = ...)`.
 #'
 #' **Tornadoes without a ZCTA.**
 #' `r nrow(tornado_tracks) - length(unique(tornado_exposure$tornado_id))`
-#' tornadoes touch no ZCTA of their boundary year (paths over water, and areas
-#' that the Census does not assign to a ZCTA; `data-raw/known_issues.md` gives
-#' the counts). They are in [tornado_tracks]
-#' but not in this dataset, and their property loss is not allocated.
+#' tornadoes have no row (their line crosses no ZCTA of their boundary year, or their start point lies in none, and no NWS polygon covers land in a ZCTA). They are in [tornado_tracks]
+#' but not in this dataset, and their property loss is not allocated (`data-raw/known_issues.md` gives the counts).
 #'
-#' **Property loss.** `property_loss_tornado_total` is the SPC `loss` for the
-#' whole tornado in nominal dollars (repeated on every row of the tornado; do
-#' not sum it across rows), and `modeled_property_loss_allocated` splits it across the
-#' ZCTAs in proportion to `modeled_area_share_of_tornado`, so a tornado's allocated
-#' values sum to its total. It is an estimate, not a measurement: it assumes
-#' the damage is spread evenly over the area of the path, so a tornado that
-#' crosses a sparsely settled ZCTA for most of its length but hits a dense one
-#' briefly has most of its loss assigned to the sparse ZCTA. The total is `NA` when SPC recorded 0 or
-#' no value, which NOAA says does not mean $0. SPC loss is incomplete even for
-#' the deadliest tornadoes: the Mayfield, Kentucky tornado of December 2021
-#' (`r tornado_tracks$total_fatality[tornado_tracks$tornado_id == "2021_2112102054-01"]`
-#' deaths) has a loss of
-#' `r format(tornado_tracks$property_loss_tornado_total[tornado_tracks$tornado_id == "2021_2112102054-01"], big.mark = ",")`
-#' dollars, and `r sum(is.na(tornado_tracks$property_loss_tornado_total) & !is.na(tornado_tracks$magnitude) & tornado_tracks$magnitude >= 4 & as.integer(substr(tornado_tracks$tornado_id, 1, 4)) >= 2007)`
-#' of the `r sum(!is.na(tornado_tracks$magnitude) & tornado_tracks$magnitude >= 4 & as.integer(substr(tornado_tracks$tornado_id, 1, 4)) >= 2007)`
-#' EF4 and EF5 tornadoes since 2007 have no loss recorded. SPC reports loss in
-#' millions of dollars through 2006 (converted here without rounding beyond floating-point error); the raw value and its unit
-#' are in [tornado_tracks] (`loss_raw`, `loss_raw_unit`).
-#'
-#' **Injuries and fatalities** are tornado-level totals attributed to every ZCTA
-#' the tornado touched (they are not allocated), so do not sum them across the
-#' rows of one tornado.
+#' **Injuries and fatalities** are tornado-level totals attributed to every ZCTA of the tornado (they are not allocated), so do not sum them across the rows of one tornado.
 #'
 #' **Coordinate rounding.** Coordinates for 1996 to 2006 are given by SPC to 0.01
 #' degrees, which is about 1.1 km of latitude, so a coordinate can be off by up
@@ -145,46 +111,43 @@
 #'     recorded 0 or no value (see Property loss).}
 #'   \item{track_type}{`"line"` or `"point"` (see [tornado_tracks]).}
 #'   \item{ZCTA}{Five-character ZCTA code as a string, with leading zeros.}
-#'   \item{boundary_dist_km}{Distance in kilometers from the SPC line (or start point) to the ZCTA boundary; 0 when the line touches the ZCTA.}
+#'   \item{spc_exposed}{`TRUE` when the SPC line crosses the ZCTA (the start point lies in it, for a point tornado); `FALSE` for a ZCTA that only the NWS polygons expose.}
+#'   \item{line_km_in_zcta}{Kilometers of the SPC line inside the ZCTA; `NA` for a point tornado and for a ZCTA the line does not cross (`NA` on rows with `spc_exposed` `FALSE` in this dataset).}
+#'   \item{line_share_of_tornado}{Length of the line in the ZCTA divided by the length of the line in all the ZCTAs it reaches (sums to 1 over a tornado's SPC rows; 1 for a point tornado); `NA` where `spc_exposed` is `FALSE`.}
+#'   \item{property_loss_allocated}{`property_loss_tornado_total` times `line_share_of_tornado`; `NA` where either is `NA`.}
 #'   \item{centroid_dist_km}{Distance in kilometers from the SPC line (or start point) to the population-weighted centroid of the ZCTA.}
-#'   \item{modeled_intersection_m2}{Area of the modeled path inside the ZCTA, in square meters (EPSG:5070). `NA` when no path shape is modeled.}
-#'   \item{modeled_area_prop}{`modeled_intersection_m2 / zcta_polygon_area_m2`, not capped. Used by `area_thresh`.}
-#'   \item{modeled_pop_affected}{Estimated residents inside the modeled path within the ZCTA
-#'     (a count, not rounded), from block populations allocated by the share of each
-#'     block's area inside the path. The `pop_thresh` argument applies to the share
-#'     (`modeled_pop_prop`) only; to filter on the count, subset the result, for
-#'     example `subset(x, modeled_pop_affected >= n)` with `n` a number of residents of your choice.}
-#'   \item{modeled_pop_prop}{`modeled_pop_affected / zcta_pop`, not capped; `NA` when
-#'     `zcta_pop` is 0. Used by `pop_thresh`.}
-#'   \item{modeled_area_share_of_tornado}{Modeled area inside the ZCTA divided by
-#'     the sum of that tornado's modeled areas across all ZCTAs it crossed. Shares sum
-#'     to 1 over a tornado's rows. This is a different denominator from
-#'     `modeled_area_prop`.}
-#'   \item{modeled_property_loss_allocated}{`property_loss_tornado_total` times
-#'     `modeled_area_share_of_tornado` (area-weighted approximation); `NA` when the
-#'     tornado total or the modeled path is `NA`.}
-#'   \item{zcta_polygon_area_m2}{Area of the full TIGER/Line ZCTA polygon of the boundary year, in square meters (EPSG:5070).}
+#'   \item{boundary_dist_km}{Distance in kilometers from the SPC line (or start point) to the ZCTA boundary; 0 exactly where `spc_exposed` is `TRUE`.}
+#'   \item{zcta_pop}{Total population of the ZCTA in the boundary year used for the tornado's year (sum of its blocks' populations).}
 #'   \item{zcta_land_area_m2}{Census land area (`ALAND`) of the ZCTA in the boundary year, in square meters.}
-#'   \item{zcta_pop}{Total population of the ZCTA in the boundary year used for the
-#'     tornado's year (sum of its blocks' populations).}
+#'   \item{zcta_polygon_area_m2}{Area of the full TIGER/Line ZCTA polygon of the boundary year, in square meters (EPSG:5070).}
+#'   \item{zcta_land_shape_area_m2}{Area of the land-only shape of the ZCTA (the polygon minus the Census water polygons inside it), in square meters (EPSG:5070); the denominator of the DAT area shares.}
+#'   \item{dat_linked}{`TRUE` when the tornado has at least one linked DAT line ([tornado_dat_link]).}
+#'   \item{dat_line_ids}{`objectid` of the linked lines in [dat_lines], separated by `;`; `NA` without a link.}
+#'   \item{dat_exposed}{`TRUE` when a linked NWS polygon covers some land in the ZCTA; `NA` for a tornado with no link.}
+#'   \item{dat_area_share}{Share of the ZCTA's land-only area covered by the union of the tornado's linked NWS polygons (EF0 to EF5), each area counted once; `NA` without a link.}
+#'   \item{dat_area_share_ef0, dat_area_share_ef1, dat_area_share_ef2, dat_area_share_ef3, dat_area_share_ef4, dat_area_share_ef5}{The part of `dat_area_share` whose highest rated linked polygon has that rating. They sum to `dat_area_share`.}
+#'   \item{dat_pop_affected}{Residents in the covered land of the ZCTA (a count, not rounded); `NA` without a link.}
+#'   \item{dat_pop_ef0, dat_pop_ef1, dat_pop_ef2, dat_pop_ef3, dat_pop_ef4, dat_pop_ef5}{The part of `dat_pop_affected` by highest rating, as for the area shares.}
+#'   \item{dat_points_ef0, dat_points_ef1, dat_points_ef2, dat_points_ef3, dat_points_ef4, dat_points_ef5, dat_points_efu, dat_points_wind, dat_points_other}{Counts of NWS damage points in the ZCTA dated within one day of the tornado, by `efscale` as entered (`EF0` to `EF5`, `EFU`, `TSTM/Wind`, other values and none); `NA` without a link.}
+#'   \item{other_tornadoes_in_zcta_within_a_day}{Number of other SPC tornadoes whose line crosses the ZCTA within one day of this tornado; `NA` without a link.}
 #' }
 #'
 #' @source NOAA Storm Prediction Center severe weather database
-#'   (<https://www.spc.noaa.gov/wcm/data/1950-`r max(tornado_exposure$year)`_all_tornadoes.csv>)
-#'   and Census Bureau ZCTA boundaries (2000, 2010 and 2020 boundary years) via tigris.
-#'   Built by `data-raw/process_tracks.R` (full rebuild) and extended year by year by
-#'   `data-raw/update_data.R`; the population columns by `data-raw/add_population.R`.
+#'   (<https://www.spc.noaa.gov/wcm/data/1950-`r max(tornado_exposure$year)`_all_tornadoes.csv>),
+#'   NOAA National Weather Service Damage Assessment Toolkit, and Census Bureau ZCTA boundaries, water polygons and blocks (2000, 2010 and 2020 boundary years).
+#'   The SPC rows are built by `data-raw/process_tracks.R` (full rebuild) and extended year by year by
+#'   `data-raw/update_data.R`; the DAT columns and rows by `data-raw/dat/build_dat_exposure.R`.
 #'
-#' @seealso [tornado_tracks], [spc_records], [get_data()]
+#' @seealso [tornado_tracks], [spc_records], [get_data()], [dat_exposure_tract]
 "tornado_exposure"
 
 #' Tornado tracks
 #'
 #' One row per tornado (the whole-track record of SPC, `sg == 1`) from
 #' `r min(as.integer(substr(tornado_tracks$tornado_id, 1, 4)))` to `r max(as.integer(substr(tornado_tracks$tornado_id, 1, 4)))`,
-#' with the track as geometry (EPSG:4326, longitude and latitude), SPC's values as given, and the modeled path area.
+#' with the track as geometry (EPSG:4326, longitude and latitude) and SPC's values as given.
 #' `r format(nrow(tornado_tracks), big.mark = ",")` tornadoes, including the
-#' `r nrow(tornado_tracks) - length(unique(tornado_exposure$tornado_id))` that touch no ZCTA and are absent from [tornado_exposure].
+#' `r nrow(tornado_tracks) - length(unique(tornado_exposure$tornado_id))` that have no row in [tornado_exposure].
 #'
 #' @details
 #' **Tracks with no usable end point.** For
@@ -192,14 +155,15 @@
 #' (`r sprintf("%.1f", 100 * mean(tornado_tracks$track_type == "point"))`%) SPC's end coordinates are missing, 0 or equal to the start
 #' (`r format(sum(tornado_tracks$track_type == "point" & tornado_tracks$elon == tornado_tracks$slon & tornado_tracks$elat == tornado_tracks$slat), big.mark = ",")` have an end equal
 #' to the start), so the direction and extent of the path are unknown. They are drawn as a POINT at the start
-#' (`track_type = "point"`), SPC's raw coordinates stay in `slat`, `slon`, `elat` and `elon`, and no path shape is modeled for them (`modeled_path_area_m2` is `NA`
-#' and the `modeled_*` columns of [tornado_exposure] are `NA`). Most are EF0 and short, but SPC gives a length for nearly all of them and some are long
+#' (`track_type = "point"`), SPC's raw coordinates stay in `slat`, `slon`, `elat` and `elon`, and `line_km` and `line_km_outside_zcta` are `NA`. Most are EF0 and short, but SPC gives a length for nearly all of them and some are long
 #' (`data-raw/known_issues.md`, section Tornadoes with no usable end point, gives the counts by rating, length, era and casualties). `get_data()`
 #' prints how many such tornadoes a request holds.
 #'
 #' **Width.** `wid_yd` is SPC's width in yards exactly as given. A width of 0 or missing
-#' (`r format(sum(tornado_tracks$wid_yd == 0, na.rm = TRUE), big.mark = ",")` tornadoes, `r format(sum(tornado_tracks$wid_yd == 0 & tornado_tracks$track_type == "line", na.rm = TRUE), big.mark = ",")` of them lines)
-#' is never replaced: such a line has no modeled path polygon and its `modeled_*` columns are `NA`.
+#' (`r format(sum(tornado_tracks$wid_yd == 0, na.rm = TRUE), big.mark = ",")` tornadoes) is never replaced. The package does not use the width to draw anything.
+#'
+#' **Line length.** `line_km` is the length of the straight line from the start to the end point in kilometers, measured on the sphere (the same measure as `len_ratio`); `line_km_outside_zcta` is the part of
+#' it that lies in no ZCTA of the tornado's boundary year ([tornado_exposure] gives the part in each ZCTA). Both are `NA` for a point.
 #'
 #' **Loss.** SPC reports `loss` in millions of dollars through 2006 and in whole dollars from 2007. `loss_raw` and `loss_raw_unit` are SPC's
 #' value and its unit; `property_loss_tornado_total` is the loss in dollars (the conversion from millions is exact), `NA` where SPC recorded 0, which NOAA says
@@ -217,7 +181,8 @@
 #'   \item{wid_yd}{SPC's width in yards, as given (0 stays 0).}
 #'   \item{slat, slon, elat, elon}{SPC's start and end coordinates, as given.}
 #'   \item{len_ratio}{Straight-line length from the start to the end point divided by `len_mi`; `NA` for a point or a length of 0.}
-#'   \item{modeled_path_area_m2}{Area of the modeled path polygon in square meters (EPSG:5070); `NA` for a point and for a width of 0.}
+#'   \item{line_km}{Length of the straight line from the start to the end point in kilometers (on the sphere); `NA` for a point.}
+#'   \item{line_km_outside_zcta}{Kilometers of the line that lie in no ZCTA of the tornado's boundary year; `NA` for a point.}
 #'   \item{loss_raw, loss_raw_unit}{SPC's loss and its unit (`"millions"` or `"dollars"`).}
 #' }
 #'
@@ -258,6 +223,7 @@
 #'   \item{zcta_pop}{Total population of the ZCTA: the sum of its blocks.}
 #'   \item{zcta_land_area_m2}{Census land area (`ALAND`) in square meters.}
 #'   \item{zcta_polygon_area_m2}{Area of the full TIGER/Line polygon in square meters (EPSG:5070).}
+#'   \item{zcta_land_shape_area_m2}{Area of the land-only shape (the polygon minus the Census water polygons inside it) in square meters (EPSG:5070).}
 #' }
 #'
 #' @source Census Bureau TIGER/Line tabulation blocks and ZCTA boundaries; PL 94-171 files for 2000 and 2010. Built by `data-raw/add_centroids.R`.

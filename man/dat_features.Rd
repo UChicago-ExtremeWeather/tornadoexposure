@@ -58,6 +58,6 @@ a date-time in UTC. The service gives the numbers as text; they are stored as nu
 The accuracy of the damage polygons has not been measured, positions are the survey teams', and surveys are not available for every tornado:
 coverage grows from a few tornadoes in 2007 to most tornadoes in 2025 (\code{data-raw/known_issues.md}).
 
-\strong{Linking.} \link{tornado_dat_link} links the lines to SPC tornadoes and \link{dat_polygon_line_link} relates the polygons to the lines. Points are not linked to tornadoes by any rule.
+\strong{Linking.} \link{tornado_dat_link} links the lines to SPC tornadoes and \link{dat_polygon_line_link} relates the polygons to the lines. Points are not linked to tornadoes by any rule; \link{tornado_exposure} counts the points that lie in a ZCTA within one day of a tornado.
 }
 \keyword{datasets}

@@ -15,6 +15,7 @@ A data frame with 98932 rows and the variables:
 \item{zcta_pop}{Total population of the ZCTA: the sum of its blocks.}
 \item{zcta_land_area_m2}{Census land area (\code{ALAND}) in square meters.}
 \item{zcta_polygon_area_m2}{Area of the full TIGER/Line polygon in square meters (EPSG:5070).}
+\item{zcta_land_shape_area_m2}{Area of the land-only shape (the polygon minus the Census water polygons inside it) in square meters (EPSG:5070).}
 }
 }
 \source{

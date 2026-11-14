@@ -4,18 +4,8 @@
 .tracks <- function() tornadoexposure::tornado_tracks
 .data_years <- function() range(.exposure()$year)
 
-# Threshold validators. To add a new exposure definition (for example
-# pop_thresh), add one entry here and pass it in the `thresholds` list of the
-# calling function. Each validator returns the checked value.
+# Distance validators: each returns the checked value. Only one exposure definition can be used per call.
 .threshold_checks <- list(
-  area_thresh = function(x) {
-    .check_proportion(x, "area_thresh",
-                      "the share of the ZCTA's land area covered by the path")
-  },
-  pop_thresh = function(x) {
-    .check_proportion(x, "pop_thresh",
-                      "the share of the ZCTA's residents inside the path")
-  },
   centroid_dist_km = function(x) .check_distance(x, "centroid_dist_km"),
   boundary_dist_km = function(x) .check_distance(x, "boundary_dist_km")
 )
@@ -29,29 +19,11 @@
   if (x == 0) {
     stop(name, " = 0 is not allowed. Use a positive distance in ",
          "kilometers, for example ", name, " = 10 (an example value, not a recommendation), or NULL (the ",
-         "default) to return any overlap.", call. = FALSE)
+         "default) to return the exposed ZCTAs.", call. = FALSE)
   }
   if (x < 0) {
     stop(name, " must be a positive number of kilometers. Got ", x,
          ".", call. = FALSE)
-  }
-  x
-}
-
-.check_proportion <- function(x, name, what) {
-  if (!is.numeric(x) || length(x) != 1L || is.na(x)) {
-    stop(name, " must be a single number in (0, 1] or NULL.",
-         call. = FALSE)
-  }
-  if (x == 0) {
-    stop(name, " = 0 is not allowed. ZCTAs the path did not touch are never ",
-         "returned, so 0 would mean nothing. Use ", name, " = NULL (the ",
-         "default) to return any exposure, or a number in (0, 1].",
-         call. = FALSE)
-  }
-  if (x < 0 || x > 1) {
-    stop(name, " must be a proportion in (0, 1], for example ", name,
-         " = 0.05 for ", what, " of at least 5% (an example value, not a recommendation). Got ", x, ".", call. = FALSE)
   }
   x
 }
@@ -156,10 +128,10 @@ utils_head <- function(x, n = 5L) if (length(x) > n) c(x[seq_len(n)], "...") els
   if (length(given) > 1L) {
     stop("Only one exposure definition can be used per call, but you supplied ",
          paste(given, collapse = " and "), ". Use one threshold argument at ",
-         "a time, or none to return any overlap.", call. = FALSE)
+         "a time, or none to return the exposed ZCTAs.", call. = FALSE)
   }
   if (length(given) == 0L) {
-    return(list(name = "overlap", value = NULL))
+    return(list(name = "exposed", value = NULL))
   }
   list(name = given, value = .threshold_checks[[given]](thresholds[[given]]))
 }
@@ -195,14 +167,12 @@ utils_head <- function(x, n = 5L) if (length(x) > n) c(x[seq_len(n)], "...") els
     paste0("EF", paste(range(known), collapse = "-"))
   }
   if (anyNA(v$magnitude) && length(known) > 0L) mags <- paste(mags, "and unknown")
-  def <- if (v$definition == "overlap") {
-    "any overlap"
+  def <- if (v$definition == "exposed") {
+    "exposed ZCTAs"
   } else if (v$definition == "centroid_dist_km") {
     paste0("ZCTA centroid within ", v$threshold, " km of the SPC line")
-  } else if (v$definition == "boundary_dist_km") {
-    paste0("ZCTA boundary within ", v$threshold, " km of the SPC line")
   } else {
-    paste0(v$definition, " >= ", v$threshold)
+    paste0("ZCTA boundary within ", v$threshold, " km of the SPC line")
   }
   paste0("ZCTAs starting with ", paste(v$geo_list, collapse = ", "), ", ",
          yrs, ", ", mags, ", ", def)

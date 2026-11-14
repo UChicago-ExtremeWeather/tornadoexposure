@@ -5,7 +5,7 @@
 \alias{tornado_tracks}
 \title{Tornado tracks}
 \format{
-An sf data frame with 38,027 rows and 17 variables plus the geometry:
+An sf data frame with 38,027 rows and 18 variables plus the geometry:
 \describe{
 \item{tornado_id}{As in \link{tornado_exposure}.}
 \item{date}{Date of the tornado.}
@@ -17,7 +17,8 @@ An sf data frame with 38,027 rows and 17 variables plus the geometry:
 \item{wid_yd}{SPC's width in yards, as given (0 stays 0).}
 \item{slat, slon, elat, elon}{SPC's start and end coordinates, as given.}
 \item{len_ratio}{Straight-line length from the start to the end point divided by \code{len_mi}; \code{NA} for a point or a length of 0.}
-\item{modeled_path_area_m2}{Area of the modeled path polygon in square meters (EPSG:5070); \code{NA} for a point and for a width of 0.}
+\item{line_km}{Length of the straight line from the start to the end point in kilometers (on the sphere); \code{NA} for a point.}
+\item{line_km_outside_zcta}{Kilometers of the line that lie in no ZCTA of the tornado's boundary year; \code{NA} for a point.}
 \item{loss_raw, loss_raw_unit}{SPC's loss and its unit (\code{"millions"} or \code{"dollars"}).}
 }
 }
@@ -30,9 +31,9 @@ tornado_tracks
 \description{
 One row per tornado (the whole-track record of SPC, \code{sg == 1}) from
 1996 to 2025,
-with the track as geometry (EPSG:4326, longitude and latitude), SPC's values as given, and the modeled path area.
+with the track as geometry (EPSG:4326, longitude and latitude) and SPC's values as given.
 38,027 tornadoes, including the
-644 that touch no ZCTA and are absent from \link{tornado_exposure}.
+645 that have no row in \link{tornado_exposure}.
 }
 \details{
 \strong{Tracks with no usable end point.} For
@@ -40,14 +41,15 @@ with the track as geometry (EPSG:4326, longitude and latitude), SPC's values as 
 (27.3\%) SPC's end coordinates are missing, 0 or equal to the start
 (10,383 have an end equal
 to the start), so the direction and extent of the path are unknown. They are drawn as a POINT at the start
-(\code{track_type = "point"}), SPC's raw coordinates stay in \code{slat}, \code{slon}, \code{elat} and \code{elon}, and no path shape is modeled for them (\code{modeled_path_area_m2} is \code{NA}
-and the \verb{modeled_*} columns of \link{tornado_exposure} are \code{NA}). Most are EF0 and short, but SPC gives a length for nearly all of them and some are long
+(\code{track_type = "point"}), SPC's raw coordinates stay in \code{slat}, \code{slon}, \code{elat} and \code{elon}, and \code{line_km} and \code{line_km_outside_zcta} are \code{NA}. Most are EF0 and short, but SPC gives a length for nearly all of them and some are long
 (\code{data-raw/known_issues.md}, section Tornadoes with no usable end point, gives the counts by rating, length, era and casualties). \code{get_data()}
 prints how many such tornadoes a request holds.
 
 \strong{Width.} \code{wid_yd} is SPC's width in yards exactly as given. A width of 0 or missing
-(473 tornadoes, 138 of them lines)
-is never replaced: such a line has no modeled path polygon and its \verb{modeled_*} columns are \code{NA}.
+(473 tornadoes) is never replaced. The package does not use the width to draw anything.
+
+\strong{Line length.} \code{line_km} is the length of the straight line from the start to the end point in kilometers, measured on the sphere (the same measure as \code{len_ratio}); \code{line_km_outside_zcta} is the part of
+it that lies in no ZCTA of the tornado's boundary year (\link{tornado_exposure} gives the part in each ZCTA). Both are \code{NA} for a point.
 
 \strong{Loss.} SPC reports \code{loss} in millions of dollars through 2006 and in whole dollars from 2007. \code{loss_raw} and \code{loss_raw_unit} are SPC's
 value and its unit; \code{property_loss_tornado_total} is the loss in dollars (the conversion from millions is exact), \code{NA} where SPC recorded 0, which NOAA says

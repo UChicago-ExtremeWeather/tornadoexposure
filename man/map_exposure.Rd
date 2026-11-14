@@ -10,8 +10,6 @@ map_exposure(
   year_range,
   feature = NULL,
   magnitude = c(0:5, NA),
-  area_thresh = NULL,
-  pop_thresh = NULL,
   centroid_dist_km = NULL,
   boundary_dist_km = NULL,
   layers = c("zcta", "spc_tracks")
@@ -41,56 +39,33 @@ magnitude of \code{NA}; they are kept only if \code{NA} is in the vector, as in
 \code{magnitude = c(1:5, NA)}. Ratings before 2007 are on the original Fujita
 (F) scale.}
 
-\item{area_thresh}{\code{NULL} (default) returns every tornado that touched the
-ZCTA, including very small overlaps. A number in (0, 1] keeps rows with
-\code{modeled_area_prop >= area_thresh} (0.5 means half of the ZCTA's polygon area).
-\code{0} is an error. A higher threshold means fewer ZCTAs qualify as exposed. The
-area share depends on the size of the ZCTA as well as on how the path crossed it.
-Tornadoes with no modeled path shape are not evaluated and not returned. Cannot
-be combined with another definition.}
-
-\item{pop_thresh}{\code{NULL} (default) or a proportion in (0, 1]. Keeps rows with
-\code{modeled_pop_prop >= pop_thresh}: the share of the ZCTA's resident
-population (total population, all ages, at the census year of the ZCTA's
-boundary year) estimated to live inside the modeled path, from block-level population
-allocated by the share of each block's area inside the path. It follows where
-residents live rather than how much land the path covered. \code{0} is an error.
-ZCTAs with no residents have no population share and are never returned
-under this definition. Tornadoes with no modeled path shape are not evaluated and
-not returned. The count of residents (\code{modeled_pop_affected}) and the ZCTA's
-population (\code{zcta_pop}) are returned by every call, so you can
-filter on the count yourself, for example
-\code{subset(x, modeled_pop_affected >= n)} with \code{n} a number of residents of your choice. Cannot be combined with another definition.}
-
 \item{centroid_dist_km}{\code{NULL} (default) or a positive number of kilometers.
 Keeps ZCTAs whose population-weighted centroid (see \link{zcta_centroids}) lies
 within this distance of the SPC line (of the start point for a tornado with no
-usable end point), whether or not the path touches the ZCTA. \code{0} is an error and
-there is no upper limit. The result is not a superset of the overlap set: a large
-ZCTA crossed at its edge can have a centroid farther than the radius. For ZCTAs
-the path does not touch, \verb{modeled_*} columns are 0 (a tornado with a modeled path
-shape) or \code{NA} (a tornado without one) and \code{boundary_dist_km} is \code{NA}
-(use \code{boundary_dist_km} to measure it). SPC's paths are straight lines
-between the start and end points and real paths curve:
-\code{data-raw/known_issues.md} (section "Modeled columns") gives the median
-and 90th percentile of the largest distance between the surveyed
-centerline and the SPC line, by tornado length, and a radius smaller than
-those distances cannot separate exposure from path-location error. Large radii
-across many years and ZCTAs can be slow, and a message gives a rough time
-before the work starts. Cannot be combined with another definition.}
+usable end point), whether or not the line crosses the ZCTA. \code{0} is an error and
+there is no upper limit. The result is not a superset of the exposed set: a large
+ZCTA crossed at its edge can have a centroid farther than the radius. For a ZCTA
+that neither source exposes, \code{spc_exposed} is \code{FALSE}, \code{line_km_in_zcta} and
+\code{line_share_of_tornado} are 0 (\code{NA} for a point), the DAT area and resident
+columns are 0 for a tornado with a linked line, the point counts are \code{NA}
+(they are tabulated only for exposed ZCTAs), and \code{boundary_dist_km} is \code{NA}
+(use \code{boundary_dist_km} to measure it). Large radii across many years and ZCTAs
+can be slow, and a message gives a rough time before the work starts.
+Cannot be combined with another definition.}
 
 \item{boundary_dist_km}{\code{NULL} (default) or a positive number of kilometers.
 Keeps ZCTAs whose boundary lies within this distance of the SPC line (of the start
 point for a tornado with no usable end point); the distance is 0 when the line
-touches the ZCTA. There is no upper limit. The distance uses the full
+crosses the ZCTA. There is no upper limit. The distance uses the full
 TIGER/Line ZCTA boundaries (not the generalized cartographic files), a national
 file of about 680 MB (2000 boundaries), 524 MB (2010) or 528 MB (2020) that is
-downloaded once and cached; a message says which. Cannot be combined with another
-definition.}
+downloaded once and cached; a message says which. Rows for ZCTAs that no source
+exposes are filled as described under \code{centroid_dist_km}. Cannot be combined
+with another definition.}
 
 \item{layers}{Character vector of layers to draw, from \code{"zcta"}, \code{"tract"},
-\code{"block_group"}, \code{"spc_tracks"}, \code{"dat_lines"}, \code{"dat_polygons"},
-\code{"dat_points"} and \code{"spc_path"}. The default is \code{c("zcta", "spc_tracks")}.}
+\code{"block_group"}, \code{"spc_tracks"}, \code{"dat_lines"}, \code{"dat_polygons"} and
+\code{"dat_points"}. The default is \code{c("zcta", "spc_tracks")}.}
 }
 \value{
 A ggplot object.
@@ -98,7 +73,8 @@ A ggplot object.
 \description{
 One map function. It takes the same arguments as \code{\link[=get_data]{get_data()}} and draws the
 layers named in \code{layers} for the tornadoes that \code{get_data()} returns. Everything is
-drawn as stored (projected to longitude and latitude, nothing simplified).
+drawn as stored (projected to longitude and latitude, nothing simplified). No
+polygon is drawn from SPC's width.
 }
 \details{
 Layers:
@@ -118,8 +94,6 @@ tornado that lie inside the box of those lines and polygons (colored by EF
 rating, including EFU and TSTM/Wind). The caption gives the link distances. The
 linked selection is a display choice, not a data rule; the complete layers are
 \link{dat_lines}, \link{dat_polygons} and \link{dat_points}.
-\item \code{"spc_path"}: the modeled path rectangle, only on a map that also has a DAT layer,
-labeled "modeled width, not a damage boundary".
 }
 
 A message is printed when a request is large (more than 2,000 damage points) or

@@ -15,11 +15,12 @@ Description: This package contains data and functions to allow users to explore
     Data comes from the NOAA Storm Prediction Center Severe Weather Database, the
     National Weather Service Damage Assessment Toolkit and the Census Bureau.
     The complete SPC records and tracks are included, with the SPC values as
-    given. Exposure can be defined by overlap, by the modeled share of the ZCTA's
-    area or residents inside the path, or by the distance from the SPC line to
-    the ZCTA's population-weighted centroid or boundary. The National Weather
-    Service damage points, lines and polygons are included unmodified and are
-    linked to the SPC tornadoes.
+    given. A ZCTA is exposed when the SPC line crosses it or a damage polygon of
+    the linked National Weather Service survey covers land in it, with the land
+    share and residents by rating at the ZCTA, census tract and block group, or
+    by the distance from the SPC line to the ZCTA's population-weighted centroid
+    or boundary. The National Weather Service damage points, lines and polygons
+    are included unmodified and are linked to the SPC tornadoes.
 License: GPL (>= 2)
 Encoding: UTF-8
 LazyData: true
