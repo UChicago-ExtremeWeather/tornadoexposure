@@ -1,7 +1,7 @@
 {
   "title": "tornadoexposure",
   "version": "0.2.0",
-  "publication_date": "2026-11-12",
+  "publication_date": "2026-11-13",
   "description": "This package contains data and functions to allow users to explore and map ZCTA-level tornado exposures in the United States from 1996 onward. Data comes from the NOAA Storm Prediction Center Severe Weather Database, the National Weather Service Damage Assessment Toolkit and the Census Bureau. The complete SPC records and tracks are included, with the SPC values as given. The National Weather Service damage points, lines and polygons are included unmodified and are linked to the SPC tornadoes.",
   "creators": [
     {

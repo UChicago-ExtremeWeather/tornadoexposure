@@ -2,7 +2,7 @@ Package: tornadoexposure
 Type: Package
 Title: Explore and Map ZCTA-Level Tornado Exposures in the United States
 Version: 0.2.0
-Date: 2026-11-12
+Date: 2026-11-13
 Authors@R: c(
     person("Hailey", "Hansen", role = "aut"),
     person("Jessy", "Nguyen", role = "aut"),
