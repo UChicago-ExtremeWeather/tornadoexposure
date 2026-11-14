@@ -21,6 +21,6 @@ cat(sprintf("\nOverall: s > half-width for %d of %d lines (%.1f%%); with roundin
 cat("\n20 largest s:\n"); print(d %>% arrange(desc(s_km)) %>% head(20) %>% transmute(tornado_id, st, mag, year, c_mi=round(c_mi,1), len_mi=L, s_km=round(s_km,1), half_width_km=round(half_km,2), wid_yd) %>% as.data.frame(), row.names=FALSE)
 cat("\n20 largest s among tornadoes with len_ratio between 0.5 and 1 (len is plausible vs the chord):\n"); print(d %>% filter(c_mi/L > .5) %>% arrange(desc(s_km)) %>% head(10) %>% transmute(tornado_id, st, mag, year, c_mi=round(c_mi,1), len_mi=L, s_km=round(s_km,1), half_width_km=round(half_km,2)) %>% as.data.frame(), row.names=FALSE)
 j <- d[d$tornado_id=="2011_1105221634-01",]; cat(sprintf("\nJoplin: chord c=%.2f mi, len L=%.2f mi, s=%.2f mi = %.2f km; path half-width %.2f km\n", j$c_mi, j$L, j$s_mi, j$s_km, j$half_km))
-# Joplin city center distance from the modeled centerline
-cl <- st_transform(ln[ln$tornado_id=="2011_1105221634-01",], 5070); for (nm in list(c("Joplin city (37.0842, -94.5133, approximate)", 37.0842, -94.5133))) { p <- st_transform(st_sfc(st_point(c(as.numeric(nm[3]), as.numeric(nm[2]))), crs=4326), 5070); cat(nm[1], ": distance to modeled centerline", round(as.numeric(st_distance(p, cl))/1000, 2), "km\n") }
+# Joplin city center distance from the SPC line
+cl <- st_transform(ln[ln$tornado_id=="2011_1105221634-01",], 5070); for (nm in list(c("Joplin city (37.0842, -94.5133, approximate)", 37.0842, -94.5133))) { p <- st_transform(st_sfc(st_point(c(as.numeric(nm[3]), as.numeric(nm[2]))), crs=4326), 5070); cat(nm[1], ": distance to the SPC line", round(as.numeric(st_distance(p, cl))/1000, 2), "km\n") }
 saveRDS(d, qa_out("pathgeom_d.rds"))

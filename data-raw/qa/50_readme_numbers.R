@@ -5,7 +5,7 @@ suppressMessages({library(sf); library(dplyr)}); source("data-raw/qa/helpers.R")
 for (f in list.files("data", pattern = "\\.rda$", full.names = TRUE)) load(f)
 tt <- st_drop_geometry(tornado_tracks); d <- tornado_exposure
 f <- "data-raw/readme/numbers.csv"; keep <- if (file.exists(f)) read.csv(f, stringsAsFactors = FALSE) else data.frame(name = character(), value = numeric(), source = character())
-keep <- keep[keep$source %in% c("46", "66"), ]    # written by data-raw/qa/46_path_accuracy.R and 66_modeled_vs_dat.R; run those after this script
+keep <- keep[keep$source %in% c("46", "63", "66", "71"), ]    # written by data-raw/qa/46_path_accuracy.R, 63_land_only_report.R, 66_spc_vs_dat.R and 71_dat_exposure_section.R; run those after this script
 out <- list(); add <- function(name, value, source) out[[length(out) + 1]] <<- data.frame(name = name, value = value, source = source)
 # coordinate rounding simulation, data-raw/qa/02
 r <- readRDS(qa_out("coordinate_rounding_summary.rds"))

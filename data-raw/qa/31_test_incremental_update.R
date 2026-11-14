@@ -18,34 +18,37 @@ if (!checks_only) {
 t0 <- Sys.time()
 status <- system2("Rscript", "data-raw/update_data.R", env = c(paste0("UPDATE_DATA_DIR=", file.path(tmp, "data")), paste0("UPDATE_PROV_DIR=", file.path(tmp, "prov")), paste0("UPDATE_LATEST_YEAR=", last)), stdout = file.path(tmp, "update.log"), stderr = file.path(tmp, "update.log"))
 cat("update_data.R exit status:", status, "; time", round(as.numeric(difftime(Sys.time(), t0, units = "mins")), 1), "minutes\n")
-cat(grep("^(Stored|SPC file|Stored years|Tornadoes after|Loss unit|Track type|Checks passed|Population|Wrote|Nothing|The new rows|  -)", readLines(file.path(tmp, "update.log")), value = TRUE), sep = "\n")
+cat(grep("^(Stored|SPC file|Stored years|Tornadoes after|Loss unit|Track type|Checks passed|Wrote|Nothing|The new rows|  -)", readLines(file.path(tmp, "update.log")), value = TRUE), sep = "\n")
 if (status != 0) { cat("update_data.R failed; last lines of its log:\n"); cat(tail(readLines(file.path(tmp, "update.log")), 15), sep = "\n"); stop("update failed") }
 n <- new.env(); load(file.path(tmp, "data", "tornado_exposure.rda"), envir = n); load(file.path(tmp, "data", "tornado_tracks.rda"), envir = n); load(file.path(tmp, "data", "spc_records.rda"), envir = n)
 cat("\n== comparison with the stored data ==\n")
 ne <- n$tornado_exposure; nt <- n$tornado_tracks
-cat("tornado_exposure: rows", nrow(ne), "vs stored", nrow(ship_e), "; identical():", identical(ne, ship_e), "\n")
-num <- names(ship_e)[sapply(ship_e, is.numeric)]
-dif <- sapply(num, function(v) max(abs(ne[[v]] - ship_e[[v]]), na.rm = TRUE)); cat("largest absolute difference by numeric column:\n"); print(signif(dif, 3))
-cat("rows differing in any column:", sum(!vapply(seq_len(nrow(ne)), function(i) identical(ne[i, ], ship_e[i, ]), logical(1))), "of", nrow(ne), "\n")
-cat("rows of", last, "only: identical():", identical(ne[ne$year == last, ], ship_e[ship_e$year == last, ]), "; rows before", last, "unchanged:", identical(ne[ne$year < last, ], ship_e[ship_e$year < last, ]), "\n")
+spc_cols <- names(ship_e)[seq_len(match("zcta_land_shape_area_m2", names(ship_e)))]   # the columns that update_data.R computes; the DAT columns stay empty until the DAT refresh
+new_rows <- ne[ne$year == last, ]; stored_new <- ship_e[ship_e$spc_exposed & ship_e$year == last, ]; rownames(stored_new) <- NULL; rownames(new_rows) <- NULL
+cat("tornado_exposure: rows", nrow(ne), "; SPC rows of", last, "re-added:", nrow(new_rows), "vs stored", nrow(stored_new), "\n")
+cat("SPC columns of the re-added rows identical():", identical(new_rows[spc_cols], stored_new[spc_cols]), "\n")
+num <- spc_cols[sapply(stored_new[spc_cols], is.numeric)]
+dif <- sapply(num, function(v) max(abs(new_rows[[v]] - stored_new[[v]]), na.rm = TRUE)); cat("largest absolute difference by numeric SPC column:\n"); print(signif(dif, 3))
+cat("DAT columns of the re-added rows are empty:", all(!new_rows$dat_linked) && all(is.na(new_rows$dat_exposed)), "\n")
+cat("rows before", last, "unchanged:", identical(ne[ne$year < last, ], ex_old), "\n")
 cat("tornado_tracks: rows", nrow(nt), "vs stored", nrow(ship_t), "; attributes identical():", identical(sf::st_drop_geometry(nt), sf::st_drop_geometry(ship_t)), "; geometry identical():", identical(sf::st_geometry(nt), sf::st_geometry(ship_t)), "; whole object identical():", identical(nt, ship_t), "\n")
 cat("same tornado_id order:", identical(nt$tornado_id, ship_t$tornado_id), "\n"); cat("spc_records: rows", nrow(n$spc_records), "vs stored", nrow(ship_r), "; identical():", identical(n$spc_records, ship_r), "\n")
-cat("\nRESULT: tornado_exposure identical in EVERY column (including modeled_pop_affected, zcta_pop, modeled_pop_prop):", identical(ne, ship_e), "; tornado_tracks identical:", identical(nt, ship_t), "; spc_records identical:", identical(n$spc_records, ship_r), "\n")
+cat("\nRESULT: SPC columns of tornado_exposure identical:", identical(new_rows[spc_cols], stored_new[spc_cols]), "; tornado_tracks identical:", identical(nt, ship_t), "; spc_records identical:", identical(n$spc_records, ship_r), "\n")
 cat("\nprovenance_years.csv after the update:\n"); print(read.csv(file.path(tmp, "prov", "provenance_years.csv")))
 cat("\nprovenance.txt section:\n"); p <- readLines(file.path(tmp, "prov", "provenance.txt")); i <- which(p == "## SPC release by year"); cat(p[i:(i + 4)], sep = "\n")
 }
 # ---- failure checks ------------------------------------------------------------------------
 cat("\n== checks that must stop the update (run on the new", last, "rows) ==\n")
 source("data-raw/pipeline_functions.R")
-new_t <- ship_t[as.integer(substr(ship_t$tornado_id, 1, 4)) == last, ]; new_e <- ship_e[ship_e$year == last, ]
+new_t <- ship_t[as.integer(substr(ship_t$tornado_id, 1, 4)) == last, ]; new_e <- ship_e[ship_e$spc_exposed & ship_e$year == last, ]; for (nm in setdiff(names(new_e), spc_cols)) new_e[[nm]][] <- if (nm == "dat_linked") FALSE else NA
 old_t <- tr_old; old_e <- ex_old
 try_check <- function(label, t = new_t, e = new_e) { r <- tryCatch({ check_new_rows(t, e, old_t, old_e, last); "passed" }, error = function(err) conditionMessage(err)); cat("\n>", label, "\n", r, "\n") }
 try_check("unchanged rows (should pass)")
 k <- !is.na(new_t$property_loss_tornado_total)
 t2 <- new_t; t2$property_loss_tornado_total[k] <- t2$property_loss_tornado_total[k] / 1e6; try_check("loss in millions instead of dollars", t2)
 t2 <- new_t; t2$property_loss_tornado_total[!k][1] <- 0; try_check("unknown loss stored as 0 instead of NA", t2)
-e2 <- new_e; e2$modeled_property_loss_allocated[!is.na(e2$modeled_property_loss_allocated)][1] <- NA; try_check("allocated loss NA where the total is known", e = e2)
-e2 <- new_e; e2$modeled_property_loss_allocated[!is.na(e2$modeled_property_loss_allocated)][1] <- 1; try_check("allocated loss that does not sum back to the total", e = e2)
+e2 <- new_e; e2$property_loss_allocated[!is.na(e2$property_loss_allocated)][1] <- NA; try_check("allocated loss NA where the total is known", e = e2)
+e2 <- new_e; e2$property_loss_allocated[!is.na(e2$property_loss_allocated)][1] <- 1; try_check("allocated loss that does not sum back to the total", e = e2)
 t2 <- new_t; t2$loss_raw_unit[1] <- "millions"; try_check("loss unit millions in a new year", t2)
 t2 <- new_t; t2$tornado_id[1] <- "abc"; try_check("tornado_id with the wrong pattern", t2)
 t2 <- new_t; t2$wid_yd[1] <- 25000; try_check("width of 25,000 yards", t2)

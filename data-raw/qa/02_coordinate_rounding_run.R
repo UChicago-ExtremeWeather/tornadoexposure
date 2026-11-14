@@ -1,7 +1,6 @@
 # Run from the package root: Rscript data-raw/qa/02_coordinate_rounding_run.R
 source("data-raw/qa/helpers.R")
 suppressMessages({library(dplyr); library(sf)}); options(tigris_use_cache=TRUE, timeout=600)
-source("R/path_polygon.R")
 load("data/tornado_tracks.rda"); load("data/tornado_exposure.rda")
 set.seed(2026)
 yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4))
@@ -29,26 +28,25 @@ build <- function(perturb) {
   })
   sf::st_sfc(g, crs = 4326)
 }
-# The ZCTAs a tornado touches, as in data-raw/pipeline_functions.R: a line with a positive width: its path polygon (positive overlap area); a line with no width: the centerline (positive length);
-# a point: the ZCTA that contains the start point. area_prop is the polygon overlap divided by the ZCTA polygon area (NA for a centerline or a point).
+# The ZCTAs a tornado is exposed in, as in data-raw/pipeline_functions.R: a line: the ZCTAs that a positive length of the line lies in; a point: the ZCTA that contains the start point.
+# share is the length of the line in the ZCTA divided by its length in all the ZCTAs it reaches (1 for a point; 1 / n for a point on a boundary).
 run_rep <- function(perturb) {
   g <- build(perturb); g5 <- sf::st_transform(g, 5070)
-  hp <- S$track_type == "line" & !is.na(S$wid_yd) & S$wid_yd > 0
-  geom <- vector("list", length(g5)); geom[!hp] <- as.list(g5[!hp]); geom[hp] <- as.list(.path_polygon(g[hp], S$wid_yd[hp]))
-  ps <- sf::st_sf(tornado_id = S$tornado_id, hp = hp, geometry = sf::st_sfc(geom, crs = 5070))
+  ps <- sf::st_sf(tornado_id = S$tornado_id, ln = S$track_type == "line", geometry = g5)
   out <- lapply(c(2000, 2010, 2020), function(v) {
     sub <- ps[S$vint == v, ]
     x <- suppressWarnings(sf::st_intersection(sub, Z[[as.character(v)]]))
-    ty <- as.character(sf::st_geometry_type(x)); x$a <- ifelse(ty %in% c("POLYGON", "MULTIPOLYGON"), as.numeric(sf::st_area(x)), ifelse(ty %in% c("LINESTRING", "MULTILINESTRING"), as.numeric(sf::st_length(x)), 1))
-    x <- x[x$a > 0 & ((x$hp & ty %in% c("POLYGON", "MULTIPOLYGON")) | (!x$hp & ty %in% c("LINESTRING", "MULTILINESTRING", "POINT"))), ]
-    sf::st_drop_geometry(x) |> group_by(tornado_id, ZCTA, zarea, hp) |> summarise(a = sum(a), .groups = "drop")
+    ty <- as.character(sf::st_geometry_type(x)); x$a <- ifelse(ty %in% c("LINESTRING", "MULTILINESTRING"), as.numeric(sf::st_length(x)), ifelse(ty == "POINT", 1, 0))
+    x <- x[x$a > 0 & ((x$ln & ty %in% c("LINESTRING", "MULTILINESTRING")) | (!x$ln & ty == "POINT")), ]
+    sf::st_drop_geometry(x) |> group_by(tornado_id, ZCTA) |> summarise(a = sum(a), .groups = "drop")
   })
-  bind_rows(out) |> mutate(area_prop = ifelse(hp, a / zarea, NA_real_)) |> select(tornado_id, ZCTA, area_prop)
+  bind_rows(out) |> group_by(tornado_id) |> mutate(share = a / sum(a)) |> ungroup() |> select(tornado_id, ZCTA, share)
 }
 t0 <- Sys.time()
 base <- run_rep(FALSE); cat("baseline done", format(Sys.time() - t0), "\n")
-chk <- inner_join(base, tornado_exposure[, c("tornado_id","ZCTA","modeled_area_prop")], by = c("tornado_id","ZCTA"))
-cat("baseline vs data: rows", nrow(base), "matched", nrow(chk), "max abs diff", max(abs(chk$area_prop - chk$modeled_area_prop), na.rm = TRUE), " exposure rows for sampled tornadoes:", sum(tornado_exposure$tornado_id %in% S$tornado_id), "\n")
+sp <- tornado_exposure[tornado_exposure$spc_exposed, ]
+chk <- inner_join(base, sp[, c("tornado_id","ZCTA","line_share_of_tornado")], by = c("tornado_id","ZCTA"))
+cat("baseline vs data: rows", nrow(base), "matched", nrow(chk), "max abs diff", max(abs(chk$share - chk$line_share_of_tornado), na.rm = TRUE), " SPC rows for sampled tornadoes:", sum(sp$tornado_id %in% S$tornado_id), "\n")
 res <- list(`0` = base)
 for (r in seq_len(reps)) { res[[as.character(r)]] <- run_rep(TRUE); cat("rep", r, "done", format(Sys.time() - t0), "\n") }
 saveRDS(list(S = st_drop_geometry(S), res = res, h = h), qa_out("d2_results.rds"))

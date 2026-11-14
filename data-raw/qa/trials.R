@@ -1,6 +1,6 @@
 # Run from the package root: Rscript data-raw/qa/trials.R
-# User-facing trials T2 to T8: a tornado with no usable end point, a multi-state tornado, a tornado with no ZCTA overlap, input errors, a rural
-# and an urban path, a clean install, and a ZCTA whose boundary changed between vintages. The printed output is the result.
+# User-facing trials T2 to T8: a tornado with no usable end point, a multi-state tornado, a tornado with no SPC row, input errors, a rural
+# and an urban ZCTA with similar NWS area shares, a clean install, and a ZCTA whose boundary changed between vintages. The printed output is the result.
 # Plots go to data-raw/qa/out/ (git-ignored). Needs an internet connection (tigris boundaries; T7 builds and checks the package).
 suppressMessages({devtools::load_all(quiet = TRUE); library(dplyr); library(sf)}); options(width = 150); sf_use_s2(FALSE)
 source("data-raw/qa/helpers.R")
@@ -8,14 +8,14 @@ hdr <- function(x) cat("\n", strrep("=", 100), "\n", x, "\n", strrep("=", 100), 
 catch <- function(expr) { w <- NULL; r <- withCallingHandlers(tryCatch(expr, error = function(e) paste0("ERROR: ", conditionMessage(e))), warning = function(w1) { w <<- c(w, conditionMessage(w1)); invokeRestart("muffleWarning") }, message = function(m) invokeRestart("muffleMessage")); list(result = r, warnings = w) }
 show_err <- function(label, expr) { o <- catch(expr); cat("\n>", label, "\n"); if (is.character(o$result) && length(o$result) == 1 && grepl("^ERROR", o$result)) cat(o$result, "\n") else cat("returned", if (is.data.frame(o$result)) paste(nrow(o$result), "rows") else "a value", "\n"); for (w in o$warnings) cat("WARNING:", w, "\n"); invisible(o) }
 
-hdr("T2: a tornado with no usable end point (a point at the start: rows, no modeled values, plotted point)")
+hdr("T2: a tornado with no usable end point (a point at the start: one SPC row, no line length, plotted point)")
 pe <- tornado_tracks[tornado_tracks$track_type == "point" & as.integer(substr(tornado_tracks$tornado_id, 1, 4)) >= 2010, ]
-ids_with_rows <- pe$tornado_id[pe$tornado_id %in% tornado_exposure$tornado_id & pe$len_mi >= 1]
+ids_with_rows <- pe$tornado_id[pe$tornado_id %in% tornado_exposure$tornado_id[tornado_exposure$spc_exposed] & pe$len_mi >= 1]
 tid <- ids_with_rows[1]; tr <- tornado_tracks[tornado_tracks$tornado_id == tid, ]
 cat("tornado:", tid, "| track_type:", tr$track_type, "| reported length (mi):", tr$len_mi, "| width (yd):", tr$wid_yd, "\n")
 rows <- tornado_exposure[tornado_exposure$tornado_id == tid, ]
-print(rows[, c("tornado_id", "magnitude", "ZCTA", "boundary_dist_km", "centroid_dist_km", "modeled_area_prop", "modeled_pop_affected", "track_type")], row.names = FALSE)
-cat("modeled columns all NA:", all(is.na(rows[, c("modeled_intersection_m2", "modeled_area_prop", "modeled_pop_affected", "modeled_pop_prop", "modeled_area_share_of_tornado", "modeled_property_loss_allocated")])), "\n")
+print(rows[, c("tornado_id", "magnitude", "ZCTA", "spc_exposed", "line_km_in_zcta", "line_share_of_tornado", "boundary_dist_km", "centroid_dist_km", "track_type")], row.names = FALSE)
+cat("line_km_in_zcta is NA and the share is 1 for the SPC row:", all(is.na(rows$line_km_in_zcta[rows$spc_exposed])), all(rows$line_share_of_tornado[rows$spc_exposed] == 1), "\n")
 zc <- rows$ZCTA[1]
 p <- map_exposure(geo_list = zc, year_range = rows$year[1], magnitude = c(0:5, NA), layers = c("zcta", "spc_tracks"))
 ggplot2::ggsave(qa_out("trials_T2_point.png"), p, width = 6, height = 5, dpi = 120); cat("plotted point saved to", qa_out("trials_T2_point.png"), "\n")
@@ -29,20 +29,20 @@ mid <- "1996_1124"; if (!mid %in% tornado_tracks$tornado_id) { mid <- paste(mult
 cat("using", mid, "\n")
 r <- raw[paste(raw$yr, raw$om, sep = "_") == mid, ]; cat("SPC records for it:\n"); print(as.data.frame(r[, c("st", "sg", "inj", "fat", "len")]), row.names = FALSE)
 e <- tornado_exposure[tornado_exposure$tornado_id == mid, ]
-print(e[, c("tornado_id", "ZCTA", "total_injury", "total_fatality", "property_loss_tornado_total", "modeled_area_share_of_tornado")], row.names = FALSE)
+print(e[, c("tornado_id", "ZCTA", "total_injury", "total_fatality", "property_loss_tornado_total", "line_share_of_tornado")], row.names = FALSE)
 cat(sprintf("SPC whole-track (sg == 1) record: injuries %d, fatalities %d; sum over all segment records: injuries %d, fatalities %d; package value: injuries %d, fatalities %d (not double counted)\n",
             r$inj[r$sg == 1][1], r$fat[r$sg == 1][1], sum(r$inj), sum(r$fat), e$total_injury[1], e$total_fatality[1]))
 cat("states of the ZCTAs hit (first digits):", paste(unique(substr(e$ZCTA, 1, 3)), collapse = " "), "\n")
 
-hdr("T4: a tornado with no ZCTA overlap (empty results, no crash)")
-nz <- setdiff(tornado_tracks$tornado_id, tornado_exposure$tornado_id)
-cat("tornadoes in tornado_tracks with no exposure row:", length(nz), "\n")
+hdr("T4: a tornado with no SPC row (empty results, no crash)")
+nz <- setdiff(tornado_tracks$tornado_id, tornado_exposure$tornado_id[tornado_exposure$spc_exposed])
+cat("tornadoes in tornado_tracks with no SPC row:", length(nz), "\n")
 nzt <- tornado_tracks[tornado_tracks$tornado_id %in% nz & tornado_tracks$track_type == "line" & as.integer(substr(tornado_tracks$tornado_id, 1, 4)) >= 2015, ][1, ]
 cat("example:", nzt$tornado_id, "| rating", nzt$magnitude, "| length (mi)", nzt$len_mi, "\n")
 yr <- as.integer(substr(nzt$tornado_id, 1, 4))
 all_z <- as.character(0:9)
 for (R in c(1, 10, 25, 50)) { d <- suppressMessages(suppressWarnings(get_data(geo_list = all_z, year_range = yr, centroid_dist_km = R))); cat(sprintf("centroid_dist_km = %2d: rows for this tornado: %d\n", R, sum(d$tornado_id == nzt$tornado_id))) }
-d0 <- suppressMessages(get_data(geo_list = all_z, year_range = yr)); cat("overlap definition, all ZCTAs, that year: rows for this tornado:", sum(d0$tornado_id == nzt$tornado_id), "\n")
+d0 <- suppressMessages(get_data(geo_list = all_z, year_range = yr)); cat("exposed definition, all ZCTAs, that year: rows for this tornado:", sum(d0$tornado_id == nzt$tornado_id), "\n")
 e1 <- catch(get_data(geo_list = "648", year_range = 1996, magnitude = 5)); cat("empty request (Joplin ZCTAs, 1996, EF5): rows", nrow(e1$result), "; columns kept:", ncol(e1$result), "\n")
 cat("message:"); invisible(withCallingHandlers(get_data(geo_list = "648", year_range = 1996, magnitude = 5), message = function(m) { cat(" ", conditionMessage(m)); invokeRestart("muffleMessage") }))
 cat("map_exposure with nothing to draw returns a plot: ", inherits(suppressMessages(map_exposure(geo_list = "648", year_range = 1996, magnitude = 5)), "ggplot"), "\n")
@@ -53,11 +53,9 @@ z0 <- tornado_exposure$ZCTA[startsWith(tornado_exposure$ZCTA, "0")][1]; z0n <- a
 cat("\nA Northeast ZCTA with tornado exposure rows:", z0, "(as a number it becomes", z0n, ")\n")
 show_err(sprintf("get_data(geo_list = %d, year_range = 1996:2025)  [numeric Northeast ZCTA loses its leading zero]", z0n), get_data(geo_list = z0n, year_range = 1996:2025))
 cat(sprintf("  rows with the string \"%s\": %d; rows with the number %d: %d (it is treated as the prefix \"%d\", which matches no ZCTA)\n", z0, nrow(get_data(geo_list = z0, year_range = 1996:2025)), z0n, nrow(suppressMessages(suppressWarnings(get_data(geo_list = z0n, year_range = 1996:2025)))), z0n))
-show_err("area_thresh = 0", get_data(geo_list = "648", year_range = 2011, area_thresh = 0))
-show_err("area_thresh = 1.5", get_data(geo_list = "648", year_range = 2011, area_thresh = 1.5))
-show_err("area_thresh and pop_thresh together", get_data(geo_list = "648", year_range = 2011, area_thresh = 0.1, pop_thresh = 0.1))
-show_err("area_thresh, pop_thresh and centroid_dist_km together", get_data(geo_list = "648", year_range = 2011, area_thresh = 0.1, pop_thresh = 0.1, centroid_dist_km = 5))
-show_err("pop_thresh = 0", get_data(geo_list = "648", year_range = 2011, pop_thresh = 0))
+show_err("area_thresh = 0.1  [argument removed]", get_data(geo_list = "648", year_range = 2011, area_thresh = 0.1))
+show_err("pop_thresh = 0.1  [argument removed]", get_data(geo_list = "648", year_range = 2011, pop_thresh = 0.1))
+show_err("centroid_dist_km and boundary_dist_km together", get_data(geo_list = "648", year_range = 2011, centroid_dist_km = 5, boundary_dist_km = 5))
 show_err("centroid_dist_km = 0", get_data(geo_list = "648", year_range = 2011, centroid_dist_km = 0))
 show_err("centroid_dist_km = -3", get_data(geo_list = "648", year_range = 2011, centroid_dist_km = -3))
 show_err("magnitude = 6", get_data(geo_list = "648", year_range = 2011, magnitude = 6))
@@ -70,18 +68,18 @@ show_err("year_range missing", get_data(geo_list = "648"))
 show_err("geography = \"county\"", get_data(geography = "county", geo_list = "648", year_range = 2011))
 show_err("geo_list = \"abc\"", get_data(geo_list = "abc", year_range = 2011))
 show_err("map_exposure(feature = \"wind\")", map_exposure(geo_list = "648", year_range = 2011, feature = "wind"))
-show_err("map_exposure(layers = \"spc_path\") without a DAT layer", map_exposure(geo_list = "648", year_range = 2011, layers = c("zcta", "spc_path")))
+show_err("map_exposure(layers = \"spc_path\")  [layer removed]", map_exposure(geo_list = "648", year_range = 2011, layers = c("zcta", "spc_path")))
 show_err("map_exposure(layers = \"wind\")", map_exposure(geo_list = "648", year_range = 2011, layers = "wind"))
 show_err("boundary_dist_km = 0", get_data(geo_list = "648", year_range = 2011, boundary_dist_km = 0))
 
-hdr("T6: a rural and an urban path with similar modeled_area_prop but very different modeled_pop_prop")
-x <- tornado_exposure[tornado_exposure$year >= 2010 & tornado_exposure$modeled_area_prop >= 0.04 & tornado_exposure$modeled_area_prop <= 0.06 & tornado_exposure$zcta_pop > 0, ]
-urban <- x[x$zcta_pop >= 10000, ]; urban <- urban[which.max(urban$modeled_pop_prop), ]
-rural <- x[abs(x$modeled_area_prop - urban$modeled_area_prop) <= 0.005 & x$modeled_pop_affected > 0, ]; rural <- rural[which.min(rural$modeled_pop_prop), ]
+hdr("T6: a rural and an urban ZCTA with similar NWS area shares but very different resident shares")
+d <- tornado_exposure; d$pop_share <- ifelse(d$zcta_pop > 0, d$dat_pop_affected / d$zcta_pop, NA)
+x <- d[d$year >= 2010 & d$dat_linked & d$dat_area_share >= 0.04 & d$dat_area_share <= 0.06 & d$zcta_pop > 0, ]
+urban <- x[x$zcta_pop >= 10000, ]; urban <- urban[which.max(urban$pop_share), ]
+rural <- x[abs(x$dat_area_share - urban$dat_area_share) <= 0.005 & x$dat_pop_affected > 0, ]; rural <- rural[which.min(rural$pop_share), ]
 out <- rbind(cbind(case = "rural", rural), cbind(case = "urban", urban))
-print(out[, c("case", "tornado_id", "ZCTA", "magnitude", "modeled_area_prop", "zcta_pop", "modeled_pop_affected", "modeled_pop_prop")], row.names = FALSE)
-cat(sprintf("area shares %.3f and %.3f; population shares %.4f and %.4f (ratio %.0f)\n", rural$modeled_area_prop, urban$modeled_area_prop, rural$modeled_pop_prop, urban$modeled_pop_prop, urban$modeled_pop_prop / rural$modeled_pop_prop))
-cat("ZCTAs exposed under pop_thresh = 0.05 for each (1 = yes):", rural$modeled_pop_prop >= 0.05, urban$modeled_pop_prop >= 0.05, "\n")
+print(out[, c("case", "tornado_id", "ZCTA", "magnitude", "dat_area_share", "zcta_pop", "dat_pop_affected", "pop_share")], row.names = FALSE)
+cat(sprintf("area shares %.3f and %.3f; resident shares %.4f and %.4f (ratio %.0f)\n", rural$dat_area_share, urban$dat_area_share, rural$pop_share, urban$pop_share, urban$pop_share / rural$pop_share))
 
 hdr("T7: clean install in a fresh temporary library and a new R session")
 lib <- tempfile("lib"); dir.create(lib); bd <- tempfile("build"); dir.create(bd)
@@ -111,7 +109,7 @@ zc <- chg$ZCTA[chg$iou < 0.9 & chg$aland10 > 5e6][1]; cat("chosen ZCTA:", zc, "\
 tab <- bind_rows(lapply(zl, function(z) { r <- z[z$ZCTA == zc, ]; if (!nrow(r)) NULL else data.frame(vintage = r$vint, aland_km2 = r$ALAND / 1e6, polygon_km2 = as.numeric(sf::st_area(r)) / 1e6) }))
 print(tab, row.names = FALSE, digits = 4)
 cat("population-weighted centroid by vintage:\n"); print(zcta_centroids[zcta_centroids$ZCTA == zc, ], row.names = FALSE)
-ex <- tornado_exposure[tornado_exposure$ZCTA == zc, c("tornado_id", "year", "modeled_area_prop", "zcta_pop")]
+ex <- tornado_exposure[tornado_exposure$ZCTA == zc, c("tornado_id", "year", "line_share_of_tornado", "zcta_pop")]
 cat("exposure rows for this ZCTA (the vintage follows the tornado's year):\n"); print(head(ex[order(ex$year), ], 6), row.names = FALSE)
 png(qa_out("trials_T8_vintages.png"), width = 1500, height = 500, res = 120); par(mfrow = c(1, 3), mar = c(1, 1, 3, 1))
 for (z in zl) { r <- z[z$ZCTA == zc, ]; if (nrow(r)) plot(sf::st_geometry(r), main = paste(zc, r$vint), col = "grey85") else plot.new() }; dev.off()

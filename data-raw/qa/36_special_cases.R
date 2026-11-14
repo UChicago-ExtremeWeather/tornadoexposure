@@ -23,7 +23,7 @@ region <- ifelse(xy[, 2] >= 50.5, "Alaska", ifelse(xy[, 2] < 23 & xy[, 1] < -150
 out <- sort(table(region[region != "48 states"]), decreasing = TRUE)
 vi <- tornado_tracks$tornado_id[region == "US Virgin Islands"]
 txt_c <- c(paste0(sum(out), " tornadoes start outside the 48 states, by their start coordinates (", paste(f0(as.numeric(out)), names(out), collapse = ", "), "). The Virgin Islands ZCTAs are not in the data (the block data cover the 50 states, DC and Puerto Rico), so the ",
-                  length(vi), " Virgin Islands tornadoes ", if (all(!vi %in% tornado_exposure$tornado_id)) "have no exposure rows" else paste(sum(vi %in% tornado_exposure$tornado_id), "have exposure rows"), "; they stay in `tornado_tracks`."))
+                  length(vi), " Virgin Islands tornadoes ", if (all(!vi %in% tornado_exposure$tornado_id[tornado_exposure$spc_exposed])) "have no exposure rows" else paste(sum(vi %in% tornado_exposure$tornado_id[tornado_exposure$spc_exposed]), "have exposure rows"), "; they stay in `tornado_tracks`."))
 block <- paste(c("<!-- special-cases:start -->", "## Ratings by year, special tracks and territories", "", txt_a, "", "### Line tracks with a length of 0", "", txt_b, "", "### Tornadoes that start outside the 48 states", "", txt_c, "<!-- special-cases:end -->"), collapse = "\n")
 p <- "data-raw/known_issues.md"; s <- paste0(paste(readLines(p, warn = FALSE), collapse = "\n"), "\n"); st_ <- "<!-- special-cases:start -->"; en <- "<!-- special-cases:end -->"
 if (grepl(st_, s, fixed = TRUE)) { a <- regexpr(st_, s, fixed = TRUE); b <- regexpr(en, s, fixed = TRUE) + nchar(en); s <- paste0(substr(s, 1, a - 1), block, substr(s, b, nchar(s))) } else s <- paste0(s, "\n", block, "\n")

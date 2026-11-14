@@ -1,15 +1,15 @@
 # Run from the package root after 08_no_zcta_tornadoes.R:  caffeinate -i Rscript data-raw/qa/47_no_zcta_details.R   (progress: data-raw/qa/out/47.log)
-# The tornadoes that touch no ZCTA of their Census boundary year (no rows in tornado_exposure): categories, counts, a sample, the size of the
+# The tornadoes that touch no ZCTA of their Census boundary year (no SPC row in tornado_exposure): categories, counts, a sample, the size of the
 # uncovered area around each path, evidence about the 2000 file, a map, and the section "Tornadoes without a ZCTA" of data-raw/known_issues.md.
 # Writes data-raw/no_zcta_categories.csv (tornado_id, category; read by the README), data-raw/qa/out/no_zcta_summary.rds and ~/tornadoexposure-no-zcta-map.png.
 #   over water                          the track does not touch state land in the Census cartographic boundary file of the states (2020, cb, 1:500,000)
 #   over land, no ZCTA nearby           it does touch state land, and more than 50% of the land within 3 km of the path is not covered by any ZCTA of the boundary year
 #   on land, mostly covered             it touches state land, and at most 50% of the land within 3 km of the path is not covered
 suppressMessages({library(sf); library(dplyr)}); sf_use_s2(FALSE); options(width = 220, tigris_use_cache = TRUE, timeout = 600)
-source("data-raw/qa/helpers.R"); source("R/path_polygon.R")
+source("data-raw/qa/helpers.R"); source("R/constants.R")
 log <- function(...) { m <- paste0(format(Sys.time(), "%H:%M:%S"), " ", paste0(...)); cat(m, "\n"); cat(m, "\n", file = qa_out("47.log"), append = TRUE) }
 load("data/tornado_tracks.rda"); load("data/tornado_exposure.rda")
-no <- read.csv(qa_out("no_zcta.csv"), stringsAsFactors = FALSE); stopifnot(nrow(no) == sum(!tornado_tracks$tornado_id %in% tornado_exposure$tornado_id))
+no <- read.csv(qa_out("no_zcta.csv"), stringsAsFactors = FALSE); stopifnot(nrow(no) == sum(!tornado_tracks$tornado_id %in% tornado_exposure$tornado_id[tornado_exposure$spc_exposed]))
 no$category <- c("offshore/water" = "over water", "on land, uncovered gap" = "over land, no ZCTA nearby", "on land, mostly covered" = "on land, mostly covered")[no$cat]
 no$boundary_year <- ifelse(no$yr < 2010, 2000L, ifelse(no$yr < 2020, 2010L, 2020L))
 write.csv(no[, c("tornado_id", "category")], "data-raw/no_zcta_categories.csv", row.names = FALSE)
@@ -51,7 +51,7 @@ ggsave(path.expand("~/tornadoexposure-no-zcta-map.png"), p, width = 10, height =
 # ---- text ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 n <- nrow(no); nt <- nrow(tornado_tracks); cc <- table(factor(no$category, cats)); line_ct <- table(no$track_type)
 txt <- paste(c("<!-- no-zcta:start -->", "## Tornadoes without a ZCTA", "",
-  paste0(f0(n), " of ", f0(nt), " tornadoes (", pc(n / nt, 2), ") touch no ZCTA of their Census boundary year (the modeled path polygon overlaps none, the SPC line lies in none, or the start point lies in none), so they have no rows in `tornado_exposure`. They stay in `tornado_tracks`, and their property loss is not assigned to any ZCTA. They fall in three categories, defined by rules:"), "",
+  paste0(f0(n), " of ", f0(nt), " tornadoes (", pc(n / nt, 2), ") have no SPC row in tornado_exposure (the SPC line crosses no ZCTA of their Census boundary year, or the start point lies in none), so they have no rows in `tornado_exposure`. They stay in `tornado_tracks`, and their property loss is not assigned to any ZCTA. They fall in three categories, defined by rules:"), "",
   paste0("* **Over water** (", f0(cc[[1]]), "): the track does not touch state land in the Census cartographic boundary file of the states (2020, 1:500,000)."),
   paste0("* **Over land, no ZCTA nearby** (", f0(cc[[2]]), "): the track touches state land, and more than 50% of the land within 3 km of the path is not covered by any ZCTA of the tornado's boundary year (median share of that land not covered: ", pc(median(no$gap_share[no$category == cats[2]], na.rm = TRUE), 0), "). The 3 km and 50% are values chosen to describe the cases, not tested choices."),
   paste0("* **On land, mostly covered** (", f0(cc[[3]]), "): the track touches state land, and at most 50% of the land within 3 km of the path is not covered (median share not covered: ", pc(median(no$gap_share[no$category == cats[3]], na.rm = TRUE), 0), ")."), "",

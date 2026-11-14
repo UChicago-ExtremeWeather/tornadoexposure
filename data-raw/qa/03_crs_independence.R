@@ -1,38 +1,37 @@
 # Run from the package root: Rscript data-raw/qa/03_crs_independence.R
-source("data-raw/qa/helpers.R")
-suppressMessages({library(dplyr); library(sf)}); options(width=160)
-source("R/path_polygon.R"); load("data/tornado_exposure.rda"); load("data/tornado_tracks.rda")
+# Does the set of ZCTAs that an SPC line crosses, and its length share in each, depend on the projection in which the straight line between the start and end points is drawn?
+# A random sample of 300 line tornadoes (100 per boundary year, seed 303) is intersected with the full ZCTA polygons of its boundary year with the line drawn straight in
+# EPSG:5070 (the package), in EPSG:6933 (equal-area cylindrical), in a local azimuthal equal-area projection centered on the line, and in longitude/latitude (planar). Reports the
+# number of tornadoes whose ZCTA set differs from the package's, and the largest difference in line_share_of_tornado.
+source("data-raw/qa/helpers.R"); source("data-raw/pipeline_functions.R")
+suppressMessages({library(dplyr); library(sf)}); sf_use_s2(FALSE); options(width = 160)
+for (f in list.files("data", pattern = "[.]rda$", full.names = TRUE)) load(f)
 set.seed(303)
-cache <- file.path(Sys.getenv("HOME"), "Library/Caches/tigris")
-zfile <- c("2000"="tl_2010_us_zcta500", "2010"="tl_2010_us_zcta510", "2020"="tl_2020_us_zcta520"); suf <- c("2000"="00","2010"="10","2020"="20")
-vint <- function(y) as.character(ifelse(y<2010,2000, ifelse(y<2020,2010,2020)))
-ex <- tornado_exposure %>% filter(modeled_area_prop < 1)
-smp <- ex[sample(nrow(ex), 200), c("tornado_id","ZCTA","year","modeled_area_prop","track_type")]
-smp$v <- vint(smp$year)
-# read only the needed ZCTAs per vintage
-zs <- lapply(names(zfile), function(v) { codes <- unique(smp$ZCTA[smp$v==v]); if (!length(codes)) return(NULL)
-  col <- paste0("ZCTA5CE", suf[[v]]); lay <- zfile[[v]]
-  q <- sprintf("SELECT %s, ALAND%s FROM %s WHERE %s IN (%s)", col, suf[[v]], lay, col, paste0("'", codes, "'", collapse=","))
-  z <- sf::read_sf(file.path(cache, paste0(lay, ".shp")), query=q); names(z)[1:2] <- c("ZCTA","ALAND"); z$ALAND <- as.numeric(z$ALAND); z }); names(zs) <- names(zfile)
-tr <- tornado_tracks[match(smp$tornado_id, tornado_tracks$tornado_id), ]
-alt_area <- function(i, crs) {
-  p <- .path_polygon(tr[i, ], tr$wid_yd[i], crs = crs)
-  z <- zs[[smp$v[i]]]; z <- z[z$ZCTA == smp$ZCTA[i], ]
-  zg <- sf::st_make_valid(sf::st_transform(sf::st_geometry(z), crs))
-  a <- sf::st_area(sf::st_intersection(sf::st_union(zg), p[[1]] |> sf::st_sfc(crs = crs)))
-  as.numeric(sum(a)) / z$ALAND[1]
+ln <- tornado_tracks[tornado_tracks$track_type == "line", ]; ln$v <- vint_of(as.integer(substr(ln$tornado_id, 1, 4)))
+smp <- bind_rows(lapply(c(2000L, 2010L, 2020L), function(v) { x <- ln[ln$v == v, ]; x[sample(nrow(x), 100), ] }))
+pieces <- function(line_geom, zc_crs) {   # ZCTA codes and length shares for each line (sfc in the CRS of zc_crs)
+  lapply(seq_along(line_geom), function(i) {
+    zc <- zc_crs$z[st_intersects(line_geom[i], zc_crs$z)[[1]], ]
+    if (!nrow(zc)) return(data.frame(ZCTA = character(), share = numeric()))
+    x <- suppressWarnings(st_intersection(line_geom[i], st_geometry(zc))); len <- as.numeric(st_length(x)); keep <- len > 0
+    data.frame(ZCTA = zc$ZCTA[attr(x, "idx")[, 2]][keep], share = len[keep] / sum(len[keep]))
+  })
 }
-t0 <- Sys.time()
-smp$p_6933 <- sapply(seq_len(nrow(smp)), alt_area, crs = 6933)
-cat("6933 done", format(Sys.time()-t0), "\n")
-cen <- sf::st_coordinates(sf::st_centroid(sf::st_geometry(tr)))
-smp$p_laea <- sapply(seq_len(nrow(smp)), function(i) alt_area(i, sprintf("+proj=laea +lat_0=%f +lon_0=%f +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs", cen[i,2], cen[i,1])))
-smp$rel_6933 <- smp$p_6933/smp$modeled_area_prop - 1; smp$rel_laea <- smp$p_laea/smp$modeled_area_prop - 1
-cat("rows:", nrow(smp), " (by vintage:", paste(names(table(smp$v)), table(smp$v), collapse=" "), "; track types:", paste(names(table(smp$track_type)), table(smp$track_type), collapse=" "), ")\n")
-cat("stored area_prop range in sample:", signif(range(smp$modeled_area_prop),3), "\n")
-for (nm in c("rel_6933","rel_laea")) { cat("\nrelative difference (new CRS / EPSG:5070 - 1):", nm, "\n"); print(signif(quantile(smp[[nm]], c(0,.01,.05,.25,.5,.75,.95,.99,1), na.rm=TRUE),3)); cat("max abs:", signif(max(abs(smp[[nm]]), na.rm=TRUE),3), " share within 0.1%:", mean(abs(smp[[nm]])<=.001, na.rm=TRUE), " within 1%:", mean(abs(smp[[nm]])<=.01, na.rm=TRUE), " NA:", sum(is.na(smp[[nm]])), "\n") }
-cat("\nworst 6 by LAEA:\n"); print(smp %>% arrange(desc(abs(rel_laea))) %>% head(6) %>% transmute(tornado_id, ZCTA, track_type, area_prop=signif(modeled_area_prop,3), p_laea=signif(p_laea,3), rel_laea=signif(rel_laea,3), rel_6933=signif(rel_6933,3)))
-cat("\nrelative difference of path polygon area itself (EPSG:5070 vs 6933 vs LAEA) for the same tornadoes:\n")
-pa <- function(crs_i) sapply(seq_len(nrow(tr)), function(i) as.numeric(sf::st_area(.path_polygon(tr[i,], tr$wid_yd[i], crs = crs_i(i)))))
-a5070 <- tr$modeled_path_area_m2; a6933 <- pa(function(i) 6933); alaea <- pa(function(i) sprintf("+proj=laea +lat_0=%f +lon_0=%f +datum=NAD83 +units=m +no_defs", cen[i,2], cen[i,1]))
-print(signif(quantile(a6933/a5070-1, c(0,.5,1)),3)); print(signif(quantile(alaea/a5070-1, c(0,.5,1)),3))
+res <- list()
+for (v in c(2000L, 2010L, 2020L)) {
+  s <- smp[smp$v == v, ]; zc <- load_zctas(v); zz <- st_geometry(zc)
+  centers <- st_coordinates(suppressWarnings(st_centroid(st_geometry(s))))
+  line5 <- st_transform(st_geometry(s), 5070)
+  cand <- st_intersects(st_buffer(line5, 10000), zz)      # only the ZCTAs near the line are transformed for each alternative projection
+  crs_of <- function(nm, i) switch(nm, `6933` = 6933, laea = sprintf("+proj=laea +lat_0=%f +lon_0=%f +x_0=0 +y_0=0 +datum=NAD83 +units=m +no_defs", centers[i, 2], centers[i, 1]), lonlat = 4269)
+  for (i in seq_len(nrow(s))) {
+    zi <- cand[[i]]; zi_sf <- st_sf(ZCTA = zc$ZCTA[zi], geometry = zz[zi])
+    a <- pieces(line5[i], list(z = zi_sf))[[1]]
+    for (nm in c("6933", "laea", "lonlat")) { crs <- crs_of(nm, i)
+      b <- pieces(st_transform(st_geometry(s)[i], crs), list(z = st_sf(ZCTA = zi_sf$ZCTA, geometry = st_transform(st_geometry(zi_sf), crs))))[[1]]
+      m <- merge(a, b, by = "ZCTA", all = TRUE, suffixes = c(".5070", ".alt")); m[is.na(m)] <- 0
+      res[[length(res) + 1]] <- data.frame(vint = v, crs = nm, tornado_id = s$tornado_id[i], same_set = setequal(a$ZCTA, b$ZCTA), max_share_diff = max(abs(m$share.5070 - m$share.alt), 0)) }
+  }
+}
+R <- bind_rows(res); out <- R %>% group_by(crs) %>% summarise(tornadoes = n(), set_differs = sum(!same_set), share_diff_max = max(max_share_diff), share_diff_p99 = quantile(max_share_diff, .99), share_diff_median = median(max_share_diff))
+print(out); saveRDS(list(summary = out, detail = R), qa_out("crs_independence.rds"))

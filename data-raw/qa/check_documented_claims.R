@@ -14,7 +14,7 @@ fails <- list(); n_ok <- 0L; fail <- function(document, check) fails[[length(fai
 
 # ---- (1) and (2): documents rebuilt in a temporary copy -----------------------------------------------
 tmp <- file.path(tempdir(), "pkgcopy"); dir.create(tmp)
-status <- system2("rsync", c("-a", "--exclude=.git", "--exclude=data-raw/qa/cache", "--exclude=data-raw/qa/out", "--exclude=data-raw/dat/fetch", "--exclude=.Rproj.user", "./", paste0(tmp, "/"))); stopifnot(status == 0)
+status <- system2("rsync", c("-a", "--exclude=.git", "--exclude=data-raw/qa/cache", "--exclude=data-raw/cache", "--exclude=data-raw/qa/out", "--exclude=data-raw/dat/fetch", "--exclude=.Rproj.user", "./", paste0(tmp, "/"))); stopifnot(status == 0)
 old <- setwd(tmp); suppressMessages(roxygen2::roxygenise(".", roclets = c("rd", "namespace"))); setwd(old)
 man_new <- list.files(file.path(tmp, "man")); man_old <- list.files("man")
 diff_man <- unique(c(setdiff(man_new, man_old), setdiff(man_old, man_new), intersect(man_new, man_old)[vapply(intersect(man_new, man_old), function(f) !identical(readLines(file.path(tmp, "man", f)), readLines(file.path("man", f))), TRUE)]))
@@ -35,8 +35,12 @@ has("data-raw/pipeline_functions.R", "first_year <- 1996", "the data start in 19
 has("data-raw/pipeline_functions.R", "loss_break_year <- 2007", "the loss unit breaks in 2007")
 has("data-raw/pipeline_functions.R", "(?s)max_median_millions <- 1\\b.*max_value_millions <- 10000\\b.*min_median_dollars <- 10000\\b", "loss guard limits 1, 10,000 and 10,000")
 has("data-raw/pipeline_functions.R", "off > 1e-9", "exact-conversion tolerance 1e-9")
-has("data-raw/population/population_functions.R", "frac_tolerance <- 1e-9", "block share tolerance 1e-9")
-has("data-raw/population/population_functions.R", "st_buffer\\(sf::st_geometry\\(tg\\), 5000\\)", "candidate-block margin 5 km")
+has("data-raw/dat/exposure_functions.R", "1 \\+ 1e-9", "block share tolerance 1e-9")
+has("data-raw/dat/build_dat_exposure.R", "1 \\+ 1e-9", "unit share tolerance 1e-9")
+has("data-raw/dat/exposure_functions.R", "line_share_in_polygon > 0", "the polygon rule: line_share_in_polygon above 0")
+has("data-raw/dat/exposure_functions.R", "EF0|paste0\\(\"EF\", 0:5\\)", "footprint polygons are those rated EF0 to EF5")
+has("data-raw/land_functions.R", "st_difference", "land-only shapes are the unit polygon minus the water polygons")
+has("data-raw/pipeline_functions.R", "piece_m > 0", "an SPC line exposes a ZCTA when a positive length of the line lies in it")
 has("data-raw/dat/pairing_functions.R", "n_samples <- 21", "21 sample points")
 has("data-raw/dat/pairing_functions.R", "window = 1", "link window 1 day")
 has("data-raw/dat/build_dat.R", "-1:1", "polygon-line window 1 day")
@@ -56,9 +60,12 @@ nm <- read.csv("data-raw/readme/numbers.csv", stringsAsFactors = FALSE); N <- fu
 ok <- all(round(c(N("map_zip_mb_2000"), N("map_zip_mb_2010"), N("map_zip_mb_2020"))) == c(680, 524, 528)); cat(if (ok) "ok    " else "FAIL  ", "boundary download sizes 680, 524 and 528 MB in the code agree with the server headers\n", sep = ""); if (ok) n_ok <- n_ok + 1L else fail("R/distance.R", "boundary download sizes differ from the server headers")
 # statements about the data
 chk <- function(what, ok) { cat(if (isTRUE(ok)) "ok    " else "FAIL  ", what, "\n", sep = ""); if (isTRUE(ok)) n_ok <<- n_ok + 1L else fail("documents", what) }
-chk("no tornado_exposure row has a modeled column when the tornado has no modeled path (documented)", all(is.na(d$modeled_area_prop[d$track_type == "point"])))
+chk("tornado_exposure has no modeled_ column and tornado_tracks no modeled_path_area_m2 (documented: no polygon is built from SPC's width)", !any(grepl("^modeled_", names(d))) && !"modeled_path_area_m2" %in% names(tt))
 chk("the St. Louis tornado is linked to two DAT lines (README)", sum(tornado_dat_link$tornado_id == "2025_2505161339-01") == 2)
-chk("a point tornado has one row (help page of tornado_exposure)", all(table(d$tornado_id[d$track_type == "point"]) == 1))
+chk("a point tornado has one SPC row unless its start lies on a ZCTA boundary (help page of tornado_exposure)", { n <- table(d$tornado_id[d$track_type == "point" & d$spc_exposed]); mean(n == 1) > 0.999 })
+chk("line_share_of_tornado sums to 1 over the SPC rows of each tornado (help page of tornado_exposure)", all(abs(tapply(d$line_share_of_tornado[d$spc_exposed], d$tornado_id[d$spc_exposed], sum) - 1) < 1e-9))
+chk("boundary_dist_km is 0 exactly where spc_exposed is TRUE (help page of tornado_exposure)", all(d$boundary_dist_km[d$spc_exposed] == 0) && all(d$boundary_dist_km[!d$spc_exposed] > 0))
+chk("dat_area_share_ef0 to ef5 sum to dat_area_share (help page of tornado_exposure)", isTRUE(all.equal(unname(rowSums(d[d$dat_linked, paste0("dat_area_share_ef", 0:5)])), d$dat_area_share[d$dat_linked], tolerance = 1e-12)))
 chk("dat_features documents all fields of the three layers", all(vapply(list(dat_points, dat_lines, dat_polygons), function(x) all(names(x) != ""), TRUE)))
 
 if (length(fails)) { F <- do.call(rbind, fails); print(F, row.names = FALSE, right = FALSE); stop(nrow(F), " documented claim(s) do not agree with the data or the code.", call. = FALSE) }

@@ -33,7 +33,6 @@ cat(sprintf("one step = %.2f mi of latitude, %.2f mi of longitude at 37N; diagon
 cat("share of one-step tornadoes with reported len < 0.5 mi:", round(mean(anyone$len<.5),3), " -> geometric length from rounding is at least ~0.57 mi\n")
 tl <- tt %>% filter(tornado_id %in% anyone$tornado_id, track_type=="line")
 cat("their len_ratio (geometric/len) quantiles:\n"); print(signif(quantile(tl$len_ratio, c(.1,.25,.5,.75,.9), na.rm=TRUE),3))
-cat("their modeled_path_area_m2 vs len*wid: median ratio", signif(median(tl$modeled_path_area_m2/(tl$len_mi*1609.344*tl$wid_yd*.9144), na.rm=TRUE),3), "\n")
 cat("\nartifact test: among early tornadoes with reported len <= 0.5 mi, share whose start==end grid cell:", round(mean(e$maxstep[e$len<=.5]==0),3), "\n")
 
 # numbers quoted in data-raw/known_issues.md (read by check_documented_claims.R)

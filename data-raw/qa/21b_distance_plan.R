@@ -2,8 +2,8 @@
 # Diagnostics for centroid_dist_km (changes nothing).
 # Needs 21a. Reports: centroids outside their own polygon, zero-resident ZCTAs,
 # size of the centroid table, runtime of a distance query, how the distance set
-# relates to the overlap set, and a check of EPSG:5070 distances against geodesic ones.
-source("data-raw/qa/helpers.R"); source("data-raw/population/population_functions.R"); source("R/path_polygon.R")
+# relates to the set of ZCTAs the SPC line crosses, and a check of EPSG:5070 distances against geodesic ones.
+source("data-raw/qa/helpers.R"); source("data-raw/population/population_functions.R"); source("R/constants.R")
 suppressMessages({library(sf); library(dplyr)}); options(width = 170); sf_use_s2(FALSE)
 CT <- readRDS(qa_out("zcta_centroids_plan.rds")); cen <- CT$centroids
 load("data/tornado_tracks.rda"); load("data/tornado_exposure.rda")
@@ -43,7 +43,7 @@ saveRDS(tab, qa_out("zcta_centroids_plan_full.rds"))
 yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4)); vint <- ifelse(yr < 2010, 2000L, ifelse(yr < 2020, 2010L, 2020L))
 poly <- sf::st_transform(sf::st_geometry(tornado_tracks), 5070)   # the SPC line, or the start point: distances are measured from it
 pts <- lapply(c("2000", "2010", "2020"), function(v) { c1 <- out[[v]]; sf::st_sf(ZCTA = c1$ZCTA, geometry = sf::st_geometry(pt5070(c1$lon, c1$lat))) }); names(pts) <- c("2000", "2010", "2020")
-ex <- tornado_exposure %>% mutate(vint = ifelse(year < 2010, 2000L, ifelse(year < 2020, 2010L, 2020L)))
+ex <- tornado_exposure %>% filter(spc_exposed) %>% mutate(vint = ifelse(year < 2010, 2000L, ifelse(year < 2020, 2010L, 2020L)))
 run <- function(R) {
   t0 <- proc.time()[3]; rows <- list()
   for (v in c(2000L, 2010L, 2020L)) {
@@ -66,7 +66,7 @@ for (R in c(1, 5, 10, 25, 50)) {
   key <- function(x) paste(x$tornado_id, x$ZCTA)
   in_ov <- key(d) %in% key(ov); ov_in <- key(ov) %in% key(d)
   nz <- setdiff(tornado_tracks$tornado_id, ex$tornado_id)
-  cat(sprintf("R = %2d km: %7d rows, %5d tornadoes with no row, time %5.1f s; overlap pairs also within R: %.1f%%; rows not in the overlap set: %.1f%%; of the %d no-ZCTA tornadoes, %d get a row\n",
+  cat(sprintf("R = %2d km: %7d rows, %5d tornadoes with no row, time %5.1f s; SPC-exposed pairs also within R: %.1f%%; rows not SPC-exposed pairs: %.1f%%; of the %d tornadoes with no SPC row, %d get a row\n",
               R, nrow(d), nrow(tornado_tracks) - length(unique(d$tornado_id)), r$secs, 100 * mean(ov_in), 100 * mean(!in_ov), length(nz), sum(nz %in% d$tornado_id)))
 }
 d25 <- res[["25"]]

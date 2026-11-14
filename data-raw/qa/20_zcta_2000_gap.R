@@ -4,7 +4,7 @@
 # reach an official ZCTA that has no polygon, using a proxy location for each missing
 # ZCTA: its polygon in the 2010 file, else in the 2020 file, else a disc with the
 # official land area centered on the Gazetteer internal point.
-source("data-raw/qa/helpers.R"); source("data-raw/population/population_functions.R"); source("R/path_polygon.R")
+source("data-raw/qa/helpers.R"); source("data-raw/population/population_functions.R"); source("R/constants.R")
 suppressMessages({library(dplyr); library(sf)}); sf_use_s2(FALSE)
 td <- tempfile(); dir.create(td); unzip(download_cached("https://www2.census.gov/geo/docs/maps-data/data/gazetteer/zcta5.zip"), exdir = td)
 tok <- strsplit(trimws(readLines(list.files(td, pattern = "zcta5.txt", full.names = TRUE))), "[[:space:]]+")
@@ -29,7 +29,7 @@ yr <- as.integer(substr(tornado_tracks$tornado_id, 1, 4)); tt <- tornado_tracks[
 pp <- st_sf(tid = tt$tornado_id, geometry = st_transform(st_geometry(tt), 5070))   # the SPC line, or the start point
 hit <- st_intersects(pp, prox)
 n_t <- sum(lengths(hit) > 0); pairs <- sum(lengths(hit))
-has_row <- pp$tid %in% tornado_exposure$tornado_id
+has_row <- pp$tid %in% tornado_exposure$tornado_id[tornado_exposure$spc_exposed]
 cat(sprintf("\n1996-2009 tornadoes (2000 vintage): %s; whose SPC line or start point reaches a proxy of a missing official ZCTA: %d (%.2f%%); proxy-ZCTA hits (tornado x missing ZCTA pairs): %d\n", format(nrow(pp), big.mark = ","), n_t, 100 * n_t / nrow(pp), pairs))
 cat(sprintf("  of those %d, %d already have at least one ZCTA row (so only some of their pairs are lost) and %d have none (they are among the tornadoes that intersect no ZCTA: %d of %d in this vintage)\n", n_t, sum(lengths(hit) > 0 & has_row), sum(lengths(hit) > 0 & !has_row), sum(!has_row), nrow(pp)))
 src <- table(unlist(lapply(hit, function(h) prox$src[h]))); cat("hits by proxy type:", paste(names(src), src, collapse = "; "), "\n")

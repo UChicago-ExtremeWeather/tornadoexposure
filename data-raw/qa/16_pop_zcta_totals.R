@@ -7,7 +7,7 @@
 # checked here.
 source("data-raw/qa/helpers.R"); source("data-raw/population/population_functions.R")
 suppressMessages({library(dplyr)})
-R <- readRDS(qa_out("population_results.rds")); zp <- R$zcta_pop
+load("data/zcta_centroids.rda"); zp <- data.frame(vint = zcta_centroids$vintage, ZCTA = zcta_centroids$ZCTA, zcta_pop = as.numeric(zcta_centroids$zcta_pop))
 load("data/tornado_exposure.rda")
 td <- tempfile(); dir.create(td)
 unzip(download_cached("https://www2.census.gov/geo/docs/maps-data/data/gazetteer/Gaz_zcta_national.zip"), exdir = td)
