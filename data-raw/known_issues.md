@@ -20,7 +20,7 @@ Numbers below were computed by the scripts in `data-raw/qa/` from the data built
 
 | Dataset | Contents | Rows | Columns | File size (xz) |
 |---|---|---|---|---|
-| `spc_records` | SPC, every tornado record from 1996 on, every column and every row (all `sg`), as SPC gives them | 38,953 | 32 | 0.78 MB |
+| `spc_records` | SPC, every tornado record from 1996 on, every column and every row (all `sg`), as SPC gives them | 38,953 | 32 | 0.77 MB |
 | `tornado_tracks` | SPC, one row per tornado (whole-track record): a line from the raw start to the raw end point, or a point at the start for a tornado with no usable end point; SPC's raw coordinates, length and width; loss as given and in dollars | 38,027 | 18 + geometry | 1.35 MB |
 | `tornado_exposure` | one row per tornado and ZCTA that the SPC line crosses or a linked NWS polygon covers land in: line length and share, distances (`boundary_dist_km`, `centroid_dist_km`), ZCTA areas and population, and the DAT columns (area and residents by rating, damage point counts) | 57,407 | 48 | 2.50 MB |
 | `dat_exposure_tract` | NWS columns only, one row per tornado and census tract that a linked NWS polygon covers land in: land-only area share and residents by rating, damage point counts | 8,005 | 28 | 0.35 MB |
@@ -32,7 +32,7 @@ Numbers below were computed by the scripts in `data-raw/qa/` from the data built
 | `tornado_dat_link` | one row per DAT line linked to an SPC tornado, with every number that describes the link | 11,573 | 13 | 0.47 MB |
 | `dat_polygon_line_link` | one row per DAT polygon and line dated within a day of each other: distance and the share of the line inside the polygon | 466,150 | 4 | 3.22 MB |
 
-The files in `data/` add up to 31.45 MB. Census inputs (ZCTA boundaries, block populations and shapes, water polygons) are read when the data are built and are not shipped; maps and the boundary distance download the full TIGER/Line files (sizes in `?get_data` and `?map_exposure`).
+The files in `data/` add up to 31.44 MB. Census inputs (ZCTA boundaries, block populations and shapes, water polygons) are read when the data are built and are not shipped; maps and the boundary distance download the full TIGER/Line files (sizes in `?get_data` and `?map_exposure`).
 <!-- provides:end -->
 
 <!-- fidelity:start -->
@@ -368,11 +368,11 @@ A call uses one exposure definition. The default returns the rows of `tornado_ex
 
 | Radius (km) | Tornado-ZCTA rows | Tornadoes without a row | Seconds | SPC-exposed pairs with the centroid within the radius | Rows that are not SPC-exposed pairs |
 |---|---|---|---|---|---|
-| 1 | 4,843 | 33,767 | 5 | 8.2% | 4.6% |
+| 1 | 4,843 | 33,767 | 4 | 8.2% | 4.6% |
 | 5 | 36,736 | 16,408 | 11 | 45.4% | 30.0% |
-| 10 | 103,695 | 5,419 | 25 | 76.3% | 58.3% |
-| 25 | 504,343 | 343 | 110 | 98.0% | 89.0% |
-| 50 | 1,774,382 | 13 | 354 | 99.8% | 96.8% |
+| 10 | 103,695 | 5,419 | 23 | 76.3% | 58.3% |
+| 25 | 504,343 | 343 | 101 | 98.0% | 89.0% |
+| 50 | 1,774,382 | 13 | 345 | 99.8% | 96.8% |
 
 The result of a centroid-distance call is not a superset of the SPC-exposed set: a large ZCTA crossed at its edge can have a centroid farther than the radius, as the share of exposed pairs within each radius shows. The distance from the SPC line to the centroid is measured in a projection that suits the region (EPSG:5070 in the 48 states, EPSG:3338 in Alaska, ESRI:102007 in Hawaii, EPSG:32161 in Puerto Rico).
 <!-- distance:end -->
