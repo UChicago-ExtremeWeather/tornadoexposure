@@ -7,24 +7,10 @@
 #                  redistricting files (total population by block)
 # Downloads are cached outside the repository.
 #
-# Stop conditions (nothing is capped, imputed or dropped without the maintainer's approval): a block with an NA population, a duplicated
-# GEOID in a block file, and a share of a block inside a path that is above 1 by more than floating-point error (1e-9).
+# Stop conditions (nothing is capped, imputed or dropped without the maintainer's approval): a block with an NA population and a duplicated GEOID in a block file.
 
 suppressMessages({library(sf); library(dplyr)})
 sf_use_s2(FALSE)
-frac_tolerance <- 1e-9   # floating-point tolerance for a block share above 1
-
-# counts of the shares computed so far in this session (path-block pieces, pieces above 1 within the tolerance, largest share), for the documentation
-pop_frac_stats <- new.env(); pop_frac_stats$pieces <- 0; pop_frac_stats$above1 <- 0; pop_frac_stats$max <- 0
-
-# share of each block's area inside the path, with the stop conditions above
-block_shares <- function(x, where) {
-  if (anyNA(x$pop)) stop("Block population is NA for ", length(unique(x$GEOID[is.na(x$pop)])), " blocks in ", where, ". NA stays NA and the build stops.", call. = FALSE)
-  frac <- x$a_in / x$a_blk
-  if (any(frac > 1 + frac_tolerance)) stop(sum(frac > 1 + frac_tolerance), " path pieces cover more than 1 + ", frac_tolerance, " of a block in ", where, " (largest ", max(frac), "). No cap is applied; inspect the data.", call. = FALSE)
-  pop_frac_stats$pieces <- pop_frac_stats$pieces + length(frac); pop_frac_stats$above1 <- pop_frac_stats$above1 + sum(frac > 1); pop_frac_stats$max <- max(pop_frac_stats$max, frac)
-  frac
-}
 options(tigris_use_cache = TRUE)
 
 pop_cache <- function(...) {
@@ -146,12 +132,10 @@ zcta_layer <- function(vintage) {
   sf::st_make_valid(sf::st_transform(z, 4269))
 }
 
-# One state, one vintage. `targets` is an sf of polygons in EPSG:5070 with
-# columns tid (character) and kind. Returns:
+# One state, one boundary year. Returns
 #   blocks:  GEOID, pop, ZCTA (block assigned by its internal point; NA if none)
-#   pop_aff: per target and ZCTA (NA = blocks assigned to no ZCTA), the residents
-#            allocated by the share of each block's area inside the polygon
-process_state <- function(vintage, st, targets, zl) {
+#   summary: one row of counts (blocks, population, NA populations, blocks and residents assigned to no ZCTA)
+process_state <- function(vintage, st, zl) {
   b <- read_blocks(vintage, st$state_code, st$dir_name, st$abb)
   if (anyDuplicated(b$GEOID)) stop(sum(duplicated(b$GEOID)), " duplicated block GEOIDs in ", vintage, " ", st$state, ".", call. = FALSE)
   st_total_pl <- attr(b, "state_total")
@@ -162,89 +146,12 @@ process_state <- function(vintage, st, targets, zl) {
   bb <- sf::st_as_sfc(sf::st_bbox(b))
   zsub <- zl[lengths(sf::st_intersects(zl, bb)) > 0, ]
   j <- sf::st_join(pts, zsub, join = sf::st_intersects)
+  n_two <- sum(duplicated(j$GEOID))      # blocks whose internal point lies in two ZCTAs; the first is kept
   j <- j[!duplicated(j$GEOID), ]
   b$ZCTA <- j$ZCTA[match(b$GEOID, j$GEOID)]
   blocks <- sf::st_drop_geometry(b)[, c("GEOID", "pop", "ZCTA")]
   summary_row <- data.frame(vintage = vintage, state = st$state, blocks = n_blocks, pop_sum = sum(b$pop, na.rm = TRUE),
                             pop_na = sum(is.na(b$pop)), state_total_pl = if (is.null(st_total_pl)) NA_real_ else st_total_pl,
-                            blocks_no_zcta = sum(is.na(b$ZCTA)), pop_no_zcta = sum(b$pop[is.na(b$ZCTA)], na.rm = TRUE))
-  # targets that reach this state
-  tg4269 <- sf::st_transform(targets, 4269)
-  near <- lengths(sf::st_intersects(tg4269, bb)) > 0
-  pop_aff <- NULL
-  if (any(near)) {
-    tg <- targets[near, ]; tg4 <- tg4269[near, ]
-    # candidate blocks: near the paths. The paths are straight-edged in EPSG:5070, but this test is done in
-    # longitude/latitude, where their edges are curved (up to about 1 km for the longest paths), so the paths are
-    # buffered by 5 km first: a block that a path touches is never missed, and the result does not depend on which
-    # other paths are processed together. The intersection itself is computed in EPSG:5070.
-    cand <- lengths(sf::st_intersects(b, sf::st_transform(sf::st_union(sf::st_buffer(sf::st_geometry(tg), 5000)), 4269))) > 0
-    if (any(cand)) {
-      bc <- sf::st_make_valid(sf::st_transform(b[cand, ], 5070))
-      bc$a_blk <- as.numeric(sf::st_area(bc))
-      bc$bid <- seq_len(nrow(bc))
-      x <- suppressWarnings(sf::st_intersection(tg[, c("tid", "kind")], bc[, c("GEOID", "bid", "pop", "ZCTA", "a_blk")]))
-      if (nrow(x)) {
-        x <- sf::st_collection_extract(x, "POLYGON")
-        x$a_in <- as.numeric(sf::st_area(x))
-        x <- sf::st_drop_geometry(x)
-        x$frac <- block_shares(x, paste(vintage, st$state))
-        x$pop_aff <- x$pop * x$frac
-        pop_aff <- x %>% group_by(tid, kind, ZCTA) %>% summarise(pop_aff = sum(pop_aff), n_blocks = n(), .groups = "drop")
-      }
-    }
-  }
-  list(blocks = blocks, pop_aff = pop_aff, summary = summary_row)
-}
-
-# Residents inside new target polygons, for the incremental update. Uses the per-state block results
-# that data-raw/add_population.R cached (block population and block-to-ZCTA assignment, `blocks`) and
-# reads the block geometries only where the targets are. If a state has not been cached, it is processed
-# in full with process_state() (slow: it assigns every block to a ZCTA) and cached. `targets` is an sf of
-# polygons in EPSG:5070 with columns tid and kind, all of one vintage; `states` is pop_states().
-# Returns the residents per target and ZCTA (NA ZCTA = blocks assigned to no ZCTA).
-pop_aff_cached <- function(vintage, targets, states, zl, all_blocks = FALSE) {   # all_blocks = TRUE skips the candidate test (for checking it)
-  stt <- tigris::states(cb = TRUE, year = 2020, progress_bar = FALSE)
-  stt <- sf::st_buffer(sf::st_transform(stt[, "STATEFP"], 5070), 10000)    # generalized outlines: be generous
-  hit <- sf::st_intersects(targets, stt)
-  fips <- sort(unique(stt$STATEFP[unlist(hit)]))
-  fips <- fips[fips %in% states$state_code]
-  out <- list()
-  for (fp in fips) {
-    st <- states[states$state_code == fp, ]
-    wf <- pop_cache("work", sprintf("%s_%s.rds", vintage, fp))
-    tg <- targets[vapply(hit, function(h) fp %in% stt$STATEFP[h], logical(1)), ]
-    if (!file.exists(wf)) {
-      res <- process_state(vintage, st, targets, zl); saveRDS(res, wf)
-      if (!is.null(res$pop_aff)) out[[length(out) + 1]] <- res$pop_aff[, c("tid", "ZCTA", "pop_aff")]
-      next
-    }
-    bl <- readRDS(wf)$blocks
-    if (anyNA(bl$pop)) stop("Block population is NA for ", sum(is.na(bl$pop)), " blocks in ", vintage, " ", st$state, ". NA stays NA and the build stops.", call. = FALSE)
-    if (anyDuplicated(bl$GEOID)) stop(sum(duplicated(bl$GEOID)), " duplicated block GEOIDs in ", vintage, " ", st$state, ".", call. = FALSE)
-    zip <- download_cached(block_url(vintage, fp), record = FALSE)
-    td <- tempfile("blk"); dir.create(td); utils::unzip(zip, exdir = td)
-    shp <- list.files(td, pattern = "\\.shp$", full.names = TRUE)
-    wkt <- sf::st_as_text(sf::st_as_sfc(sf::st_bbox(sf::st_transform(sf::st_buffer(sf::st_geometry(tg), 5000), 4269))))
-    b <- sf::read_sf(shp, wkt_filter = wkt); unlink(td, recursive = TRUE)
-    gcol <- if (vintage == 2000) "BLKIDFP00" else paste0("GEOID", substr(vintage, 3, 4))
-    b$GEOID <- b[[gcol]]; b <- b[, "GEOID"]
-    if (anyDuplicated(b$GEOID)) stop(sum(duplicated(b$GEOID)), " duplicated block GEOIDs in the ", vintage, " ", st$state, " block file.", call. = FALSE)
-    b$pop <- bl$pop[match(b$GEOID, bl$GEOID)]; b$ZCTA <- bl$ZCTA[match(b$GEOID, bl$GEOID)]
-    # candidate blocks: near the paths, buffered by 5 km (see process_state()) so that no touched block is missed
-    near_paths <- sf::st_transform(sf::st_union(sf::st_buffer(sf::st_geometry(tg), 5000)), 4269)
-    cand <- if (all_blocks) rep(TRUE, nrow(b)) else lengths(sf::st_intersects(b, near_paths)) > 0
-    if (!any(cand)) next
-    bc <- sf::st_make_valid(sf::st_transform(b[cand, ], 5070)); bc$a_blk <- as.numeric(sf::st_area(bc))
-    x <- suppressWarnings(sf::st_intersection(tg[, c("tid", "kind")], bc[, c("GEOID", "pop", "ZCTA", "a_blk")]))
-    if (!nrow(x)) next
-    x <- sf::st_collection_extract(x, "POLYGON"); x$a_in <- as.numeric(sf::st_area(x)); x <- sf::st_drop_geometry(x)
-    x$pop_aff <- x$pop * block_shares(x, paste(vintage, st$state))
-    # sum in a fixed order (path, ZCTA, block, piece area), so the result does not depend on which other paths were processed together
-    x <- x[order(x$tid, x$ZCTA, x$GEOID, x$a_in), ]
-    out[[length(out) + 1]] <- x %>% group_by(tid, ZCTA) %>% summarise(pop_aff = sum(pop_aff), .groups = "drop")
-    message("  population: ", vintage, " ", st$state, " done")
-  }
-  if (!length(out)) return(data.frame(tid = character(0), ZCTA = character(0), pop_aff = numeric(0)))
-  bind_rows(out) %>% group_by(tid, ZCTA) %>% summarise(pop_aff = sum(pop_aff), .groups = "drop")
+                            blocks_no_zcta = sum(is.na(b$ZCTA)), pop_no_zcta = sum(b$pop[is.na(b$ZCTA)], na.rm = TRUE), blocks_in_two_zcta = n_two)
+  list(blocks = blocks, summary = summary_row)
 }

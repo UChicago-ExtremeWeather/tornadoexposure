@@ -21,9 +21,13 @@ Each year of the data comes from one SPC download (an update appends only the ye
 1996-2025: https://www.spc.noaa.gov/wcm/data/1950-2025_all_tornadoes.csv, md5 75a41f9ae8f9ef74cc4be7e9cae78fa9, 9219030 bytes, accessed 2026-10-12 (full build)
 
 ## Population sources
-Downloaded: 2026-10-12 to 2026-10-12 (the date of each file is in data-raw/provenance_population.csv); this table was computed on 2026-11-12
+Downloaded: 2026-10-12 to 2026-10-12 (the date of each file is in data-raw/provenance_population.csv); this table was computed on 2026-11-13
 2020: TIGER/Line 2020 tabulation blocks (TABBLOCK20), population from field POP20
 2010 and 2000: TIGER/Line tabulation blocks (TABBLOCK/2010, TABBLOCK/2000) with total population from the Census PL 94-171 redistricting files
 Downloads: 367 files, 26.4 GB; every URL, size and md5 is in data-raw/provenance_population.csv (md5 of that file: 20556c7208f2fbcd6195b6606308cd94)
 Areas processed per boundary year: 2000 = 52, 2010 = 52, 2020 = 52 (50 states, DC and Puerto Rico)
 Block population totals match the PL 94-171 state totals for 104 of 104 state-year files (2010 and 2000)
+## Water polygons
+Downloaded: 2026-11-12 to 2026-11-12 (the date of each file is in data-raw/provenance_water.csv)
+TIGER/Line AREAWATER, one file per county: TIGER2020 for the 2020 boundary year, TIGER2010 for the 2010 and 2000 boundary years (no separate files exist for 2000)
+Downloads: 6468 files, 2.3 GB; every URL, size and md5 is in data-raw/provenance_water.csv (md5 of that file: f849ee47a8f5d4c1d7e3fa5027c6dba7)

@@ -3,7 +3,7 @@
 #   data-raw/update_data.R     (incremental, append-only update with a new SPC release)
 # so the two cannot disagree. Source from the package root.
 suppressMessages({library(readr); library(dplyr); library(sf)})
-source("R/path_polygon.R")
+source("R/constants.R")
 options(tigris_use_cache = TRUE)
 
 area_crs <- .area_crs
@@ -114,7 +114,7 @@ spc_clean <- function(raw, years) {
   same_pt <- !bad_end & tornadoes$slon == tornadoes$elon & tornadoes$slat == tornadoes$elat
   tornadoes$track_type <- ifelse(bad_end | same_pt, "point", "line")
   message("Track type: ", paste(names(table(tornadoes$track_type)), table(tornadoes$track_type), collapse = ", "))
-  message("Lines with a width of 0 or missing (no modeled path polygon): ", sum(tornadoes$track_type == "line" & (is.na(tornadoes$wid) | tornadoes$wid <= 0)))
+  message("Lines with a width of 0 or missing (kept as given): ", sum(tornadoes$track_type == "line" & (is.na(tornadoes$wid) | tornadoes$wid <= 0)))
   tornadoes
 }
 
@@ -151,100 +151,94 @@ load_zctas <- function(vintage) {
   z
 }
 
-# Builds, for cleaned tornadoes: `tracks` (tornado_tracks, with the tornado-level attributes) and
-# `exposure` (tornado_exposure without the population columns). Needs the ZCTA files of the vintages
-# of the years present (downloaded through tigris) and zcta_centroids (`cen`).
-#   line, width above 0 : the path polygon (the straight line buffered by half the width) intersected with the ZCTAs;
-#                         the modeled columns are computed
-#   line, width 0 or NA : the centerline intersected with the ZCTAs (a ZCTA is touched when a positive length of the line lies in it);
-#                         the modeled columns are NA
-#   point               : the ZCTA that contains the start point; the modeled columns are NA
+# Length in meters of the straight line between the start and end points, on the sphere (as sf measures a longitude/latitude line with s2 on; the
+# same measure as len_ratio). Only the line tornadoes have one.
+.line_m <- function(geom) {
+  old <- suppressMessages(sf::sf_use_s2(TRUE)); on.exit(suppressMessages(sf::sf_use_s2(old)))
+  as.numeric(sf::st_length(geom))
+}
+
+# Builds, for cleaned tornadoes: `tracks` (tornado_tracks, with the tornado-level attributes) and `exposure` (the SPC columns of tornado_exposure; the
+# DAT columns are added by data-raw/dat/build_dat_exposure.R). Needs the ZCTA files of the boundary years of the years present (downloaded through
+# tigris) and zcta_centroids (`cen`).
+#   line   : a ZCTA is exposed when a positive length of the line lies in it. The line is the straight line between SPC's start and end points
+#            (straight in EPSG:5070). line_km_in_zcta is the share of the line in the ZCTA (measured in EPSG:5070) times line_km.
+#   point  : a tornado with no usable end point is exposed in the ZCTA that contains its start point (boundary points count for each ZCTA).
 spc_build <- function(tornadoes, cen) {
   is_line <- tornadoes$track_type == "line"
   geom <- st_sfc(lapply(seq_len(nrow(tornadoes)), function(i) {
     if (is_line[i]) st_linestring(rbind(c(tornadoes$slon[i], tornadoes$slat[i]), c(tornadoes$elon[i], tornadoes$elat[i])))
     else st_point(c(tornadoes$slon[i], tornadoes$slat[i]))
   }), crs = 4326)
-  has_poly <- is_line & !is.na(tornadoes$wid) & tornadoes$wid > 0
-  poly <- .path_polygon(geom[has_poly], tornadoes$wid[has_poly], crs = area_crs)
-  path_area <- rep(NA_real_, nrow(tornadoes)); path_area[has_poly] <- as.numeric(st_area(poly))
   g5 <- st_transform(geom, area_crs)
   ids <- tornadoes$tornado_id
+  line_m <- rep(NA_real_, nrow(tornadoes)); line_m[is_line] <- .line_m(geom[is_line]); line_km <- line_m / 1000
+  len5 <- rep(NA_real_, nrow(tornadoes)); len5[is_line] <- as.numeric(st_length(g5[is_line]))
 
   intersect_vintage <- function(vintage, rows) {
     if (!length(rows)) return(NULL)
     zc <- load_zctas(vintage); message("  ZCTA file ", vintage, ": ", attr(zc, "n_repaired"), " invalid polygons repaired by st_make_valid")
     out <- list(); zcols <- c("ZCTA", "ALAND", "zcta_polygon_area_m2")
-    rp <- rows[has_poly[rows]]; rl <- rows[is_line[rows] & !has_poly[rows]]; rt <- rows[!is_line[rows]]
-    if (length(rp)) {
-      pl <- st_sf(tornado_id = ids[rp], geometry = poly[match(rp, which(has_poly))])
-      x <- st_collection_extract(suppressWarnings(st_intersection(pl, zc)), "POLYGON")
-      x$intersection_m2 <- as.numeric(st_area(x))
-      res <- x %>% st_drop_geometry() %>% group_by(tornado_id, ZCTA, ALAND, zcta_polygon_area_m2) %>% summarise(intersection_m2 = sum(intersection_m2), .groups = "drop") %>% mutate(kind = "polygon")
-      # distance from the SPC line to the ZCTA boundary: 0 where the line touches the ZCTA (the polygon can overlap a ZCTA that the line does not reach)
-      li <- st_intersects(g5[rp], zc); touched <- paste(rep(ids[rp], lengths(li)), zc$ZCTA[unlist(li)])
-      res$boundary_dist_km <- 0
-      far <- which(!paste(res$tornado_id, res$ZCTA) %in% touched)
-      if (length(far)) res$boundary_dist_km[far] <- .track_zcta_dist(geom[match(res$tornado_id[far], ids)], st_geometry(zc)[match(res$ZCTA[far], zc$ZCTA)])
-      out[[1]] <- res
-    }
+    rl <- rows[is_line[rows]]; rt <- rows[!is_line[rows]]
     if (length(rl)) {
       x <- suppressWarnings(st_intersection(st_sf(tornado_id = ids[rl], geometry = g5[rl]), zc))
-      x <- x[st_geometry_type(x) %in% c("LINESTRING", "MULTILINESTRING") & as.numeric(st_length(x)) > 0, ]
-      out[[2]] <- x %>% st_drop_geometry() %>% distinct(tornado_id, ZCTA, ALAND, zcta_polygon_area_m2) %>% mutate(intersection_m2 = NA_real_, boundary_dist_km = 0, kind = "centerline")
+      x <- x[st_geometry_type(x) %in% c("LINESTRING", "MULTILINESTRING"), ]; x$piece_m <- as.numeric(st_length(x))
+      out[[1]] <- x %>% st_drop_geometry() %>% filter(piece_m > 0) %>% group_by(tornado_id, ZCTA) %>% summarise(piece_m = sum(piece_m), .groups = "drop") %>% mutate(kind = "line")
+      # a ZCTA the line only touches at a point (zero length) is not exposed; the number is reported
+      li <- st_intersects(g5[rl], zc); n_touch <- sum(lengths(li)) - nrow(out[[1]])
+      message("  ZCTA file ", vintage, ": line-ZCTA pairs that touch at a point only (zero length, not exposed): ", n_touch)
     }
     if (length(rt)) {
       x <- suppressWarnings(st_intersection(st_sf(tornado_id = ids[rt], geometry = g5[rt]), zc))
-      out[[3]] <- x %>% st_drop_geometry() %>% distinct(tornado_id, ZCTA, ALAND, zcta_polygon_area_m2) %>% mutate(intersection_m2 = NA_real_, boundary_dist_km = 0, kind = "start point")
+      out[[2]] <- x %>% st_drop_geometry() %>% distinct(tornado_id, ZCTA) %>% mutate(piece_m = NA_real_, kind = "start point")
     }
     bind_rows(out)
   }
   yr_of <- tornadoes$yr
   pieces <- bind_rows(lapply(c(2000L, 2010L, 2020L), function(v) intersect_vintage(v, which(vint_of(yr_of) == v))))
   message("Tornado-ZCTA pairs: ", nrow(pieces), " (", paste(names(table(pieces$kind)), table(pieces$kind), collapse = ", "), ")")
-  zero_area <- pieces$kind == "polygon" & pieces$intersection_m2 <= 0
-  message("Dropped, exact-zero intersection area: ", sum(zero_area))
-  pieces <- pieces[!zero_area, ]
   pt_n <- pieces %>% filter(kind == "start point") %>% count(tornado_id) %>% filter(n > 1)
   message("Point tornadoes whose start lies in more than one ZCTA: ", nrow(pt_n))
   no_zcta <- setdiff(tornadoes$tornado_id, pieces$tornado_id)
-  message("Tornadoes that touch no ZCTA (kept in tornado_tracks only): ", length(no_zcta), " (", sum(tornadoes$track_type[tornadoes$tornado_id %in% no_zcta] == "point"), " are points)")
+  message("Tornadoes with no exposed ZCTA (kept in tornado_tracks only): ", length(no_zcta), " (", sum(tornadoes$track_type[tornadoes$tornado_id %in% no_zcta] == "point"), " are points)")
 
   tinfo <- tornadoes %>% transmute(tornado_id, date, year = yr, month = mo, day = dy, magnitude,
                                    total_injury = inj, total_fatality = fat,
                                    # SPC loss 0 means unknown (NOAA: it does not mean $0), so it becomes NA
                                    property_loss_tornado_total = ifelse(loss_usd > 0, loss_usd, NA_real_), track_type)
+  k <- match(pieces$tornado_id, ids)
+  pieces$line_share_of_tornado <- ifelse(pieces$kind == "line", pieces$piece_m / ave(pieces$piece_m, pieces$tornado_id, FUN = sum), 1 / ave(rep(1, nrow(pieces)), pieces$tornado_id, FUN = sum))
+  pieces$line_km_in_zcta <- ifelse(pieces$kind == "line", line_km[k] * pieces$piece_m / len5[k], NA_real_)
   exposure <- pieces %>%
-    group_by(tornado_id) %>%
-    mutate(modeled_area_share_of_tornado = intersection_m2 / sum(intersection_m2)) %>%
-    ungroup() %>%
-    transmute(tornado_id, ZCTA, boundary_dist_km, modeled_intersection_m2 = intersection_m2,
-              modeled_area_prop = intersection_m2 / zcta_polygon_area_m2, modeled_area_share_of_tornado,
-              zcta_polygon_area_m2, zcta_land_area_m2 = ALAND) %>%
+    transmute(tornado_id, ZCTA, spc_exposed = TRUE, line_km_in_zcta, line_share_of_tornado) %>%
     left_join(tinfo, by = "tornado_id") %>%
-    mutate(modeled_property_loss_allocated = property_loss_tornado_total * modeled_area_share_of_tornado,
-           vint = vint_of(year)) %>%
-    left_join(cen %>% transmute(vint = vintage, ZCTA, lon, lat, zcta_pop = as.numeric(zcta_pop)), by = c("vint", "ZCTA"))
+    mutate(property_loss_allocated = property_loss_tornado_total * line_share_of_tornado, vint = vint_of(year)) %>%
+    left_join(cen %>% transmute(vint = vintage, ZCTA, lon, lat, zcta_pop = as.numeric(zcta_pop), zcta_land_area_m2, zcta_polygon_area_m2, zcta_land_shape_area_m2), by = c("vint", "ZCTA"))
   if (anyNA(exposure$lon)) stop(sum(is.na(exposure$lon)), " tornado-ZCTA rows have a ZCTA that is not in zcta_centroids.", call. = FALSE)
   exposure$centroid_dist_km <- .track_centroid_dist(geom[match(exposure$tornado_id, ids)], exposure$lon, exposure$lat)
+  exposure$boundary_dist_km <- 0     # exposed: the line crosses the ZCTA (or the start point lies in it)
   exposure <- exposure %>%
     select(tornado_id, date, year, month, day, magnitude, total_injury, total_fatality, property_loss_tornado_total, track_type, ZCTA,
-           boundary_dist_km, centroid_dist_km, modeled_intersection_m2, modeled_area_prop, modeled_area_share_of_tornado,
-           modeled_property_loss_allocated, zcta_polygon_area_m2, zcta_land_area_m2, zcta_pop) %>%
+           spc_exposed, line_km_in_zcta, line_share_of_tornado, property_loss_allocated, centroid_dist_km, boundary_dist_km,
+           zcta_pop, zcta_land_area_m2, zcta_polygon_area_m2, zcta_land_shape_area_m2) %>%
     arrange(tornado_id, ZCTA) %>% as.data.frame()
-  m <- exposure$modeled_area_prop[!is.na(exposure$modeled_area_prop)]
-  message("modeled_area_prop above 1 (not capped): ", sum(m > 1), " rows; largest ", signif(max(m), 6))
-  chk <- exposure %>% filter(!is.na(modeled_area_share_of_tornado)) %>% group_by(tornado_id) %>%
-    summarise(share = sum(modeled_area_share_of_tornado), alloc = sum(modeled_property_loss_allocated), total = first(property_loss_tornado_total), .groups = "drop")
+  chk <- exposure %>% group_by(tornado_id) %>%
+    summarise(share = sum(line_share_of_tornado), alloc = sum(property_loss_allocated), total = first(property_loss_tornado_total), .groups = "drop")
   stopifnot(all(abs(chk$share - 1) < 1e-9))
-  # known loss: the allocated loss sums back to the total; unknown loss (NA): the allocated loss is NA
   known <- !is.na(chk$total)
   stopifnot(all(abs(chk$alloc[known] - chk$total[known]) <= 1e-8 * pmax(1, abs(chk$total[known]))), all(is.na(chk$alloc[!known])))
+  inside_km <- tapply(exposure$line_km_in_zcta, exposure$tornado_id, sum)
+  line_km_outside <- rep(NA_real_, nrow(tornadoes)); line_km_outside[is_line] <- line_km[is_line]
+  m <- match(names(inside_km), ids); has <- !is.na(inside_km) & is_line[m]
+  line_km_outside[m[has]] <- line_km[m[has]] - inside_km[has]
+  message("line_km_outside_zcta: ", sum(line_km_outside < 0, na.rm = TRUE), " lines with a negative value (smallest ", signif(min(line_km_outside, na.rm = TRUE), 3), " km)")
+  stopifnot(all(line_km_outside >= -1e-6, na.rm = TRUE))      # the ZCTAs do not overlap beyond floating-point error
+  line_km_outside <- pmax(line_km_outside, 0)
 
   # straight start-to-end distance over reported length; NA for points. A ratio above 1 is physically
   # impossible; coordinates are trusted as given.
   mi_straight <- rep(NA_real_, nrow(tornadoes))
-  mi_straight[is_line] <- as.numeric(st_length(geom[is_line])) / mi_to_m
+  mi_straight[is_line] <- line_m[is_line] / mi_to_m
   len_ratio <- ifelse(is_line & tornadoes$len > 0, mi_straight / tornadoes$len, NA_real_)
   tracks <- st_sf(
     tornado_id = tornadoes$tornado_id, date = tornadoes$date, magnitude = tornadoes$magnitude,
@@ -252,9 +246,9 @@ spc_build <- function(tornadoes, cen) {
     property_loss_tornado_total = ifelse(tornadoes$loss_usd > 0, tornadoes$loss_usd, NA_real_),
     track_type = tornadoes$track_type, len_mi = tornadoes$len, wid_yd = tornadoes$wid,
     slat = tornadoes$slat, slon = tornadoes$slon, elat = tornadoes$elat, elon = tornadoes$elon,
-    len_ratio = len_ratio, modeled_path_area_m2 = path_area,
+    len_ratio = len_ratio, line_km = line_km, line_km_outside_zcta = line_km_outside,
     loss_raw = tornadoes$loss_raw, loss_raw_unit = tornadoes$loss_raw_unit, geometry = geom)
-  list(tracks = tracks, exposure = exposure, no_zcta = no_zcta, polygons = poly, has_poly = has_poly)
+  list(tracks = tracks, exposure = exposure, no_zcta = no_zcta)
 }
 
 # ---- provenance: which SPC release each year came from ----------------------------
@@ -282,7 +276,14 @@ record_spc_release <- function(first, last, dl, note, prov_dir = "data-raw", rep
   invisible(tab)
 }
 
-# ---- checks before appending ---------------------------------------------------------
+# The DAT columns for new SPC rows: no DAT link is known yet (data-raw/dat/build_dat_exposure.R fills the DAT columns of every row from the DAT datasets).
+# `template` is the stored tornado_exposure, which gives the column order and types.
+add_dat_columns <- function(new_exposure, template) {
+  for (nm in setdiff(names(template), names(new_exposure))) new_exposure[[nm]] <- if (nm == "dat_linked") rep(FALSE, nrow(new_exposure)) else template[[nm]][NA_integer_][rep(1L, nrow(new_exposure))]
+  new_exposure[, names(template)]
+}
+
+# ---- checks before appending ---------------------------------------------------------------------------------------------
 # Stops with one message listing everything that does not match the stored data.
 check_new_rows <- function(new_tracks, new_exposure, stored_tracks, stored_exposure, new_years, new_records = NULL, stored_records = NULL) {
   bad <- character(0)
@@ -313,21 +314,22 @@ check_new_rows <- function(new_tracks, new_exposure, stored_tracks, stored_expos
   if (any(new_tracks$loss_raw_unit == "millions")) bad <- c(bad, "new years must have loss in dollars (loss_raw_unit), but some are in millions")
   # SPC loss of 0 means unknown and is stored as NA (the raw value stays in loss_raw)
   if (!identical(is.na(new_tracks$property_loss_tornado_total), new_tracks$loss_raw == 0)) bad <- c(bad, "property_loss_tornado_total must be NA exactly where SPC loss is 0")
-  if (!identical(is.na(new_exposure$modeled_property_loss_allocated), is.na(new_exposure$property_loss_tornado_total) | is.na(new_exposure$modeled_intersection_m2))) bad <- c(bad, "modeled_property_loss_allocated must be NA exactly where the tornado total or the modeled path is NA")
+  if (!identical(is.na(new_exposure$property_loss_allocated), is.na(new_exposure$property_loss_tornado_total))) bad <- c(bad, "property_loss_allocated must be NA exactly where the tornado total is NA")
   nzl <- new_tracks$property_loss_tornado_total[!is.na(new_tracks$property_loss_tornado_total)]
   if (length(nzl) && (median(nzl) < 10000 || max(nzl) > 1e11)) bad <- c(bad, sprintf("loss outside the dollar range (median of known loss %.0f, maximum %.0f; expected median of at least 10,000 and maximum below 1e11)", median(nzl), max(nzl)))
-  # no shape: modeled columns are NA exactly for point tornadoes and for lines with a width of 0
-  noshape <- new_tracks$track_type == "point" | new_tracks$wid_yd == 0
-  ns_rows <- new_exposure$tornado_id %in% new_tracks$tornado_id[noshape]
-  if (any(!is.na(new_exposure[ns_rows, c("modeled_intersection_m2", "modeled_area_prop", "modeled_pop_affected", "modeled_pop_prop", "modeled_area_share_of_tornado")])) || anyNA(new_exposure$modeled_intersection_m2[!ns_rows])) bad <- c(bad, "modeled columns must be NA exactly for tornadoes with no usable end point and for lines with a width of 0")
-  if (any(new_exposure$modeled_area_prop[!ns_rows] <= 0)) bad <- c(bad, "modeled_area_prop must be above 0")
-  if (any(!is.na(new_exposure$modeled_pop_prop) & (new_exposure$modeled_pop_prop < 0 | new_exposure$modeled_pop_prop > 1 + 1e-9))) bad <- c(bad, "modeled_pop_prop outside [0, 1]")
-  if (any(new_exposure$modeled_pop_affected > new_exposure$zcta_pop + 1e-6, na.rm = TRUE)) bad <- c(bad, "modeled_pop_affected above zcta_pop")
-  if (any(new_exposure$boundary_dist_km < 0) || any(new_exposure$centroid_dist_km < 0)) bad <- c(bad, "negative distance")
-  sh <- tapply(new_exposure$modeled_area_share_of_tornado[!ns_rows], new_exposure$tornado_id[!ns_rows], sum)
-  if (any(abs(sh - 1) > 1e-9)) bad <- c(bad, "modeled_area_share_of_tornado does not sum to 1 for every tornado with a modeled path")
-  al <- tapply(new_exposure$modeled_property_loss_allocated[!ns_rows], new_exposure$tornado_id[!ns_rows], sum); tl <- tapply(new_exposure$property_loss_tornado_total[!ns_rows], new_exposure$tornado_id[!ns_rows], function(x) x[1])
+  # SPC columns: every new row is exposed by the SPC line, the shares sum to 1, the line lengths add up, the distances are not negative, the DAT columns are empty
+  if (!all(new_exposure$spc_exposed)) bad <- c(bad, "spc_exposed must be TRUE for every new row")
+  if (any(new_exposure$boundary_dist_km != 0)) bad <- c(bad, "boundary_dist_km must be 0 where spc_exposed is TRUE")
+  if (any(new_exposure$centroid_dist_km < 0)) bad <- c(bad, "negative distance")
+  if (any(new_exposure$line_share_of_tornado <= 0 | new_exposure$line_share_of_tornado > 1 + 1e-9)) bad <- c(bad, "line_share_of_tornado must be in (0, 1]")
+  sh <- tapply(new_exposure$line_share_of_tornado, new_exposure$tornado_id, sum)
+  if (any(abs(sh - 1) > 1e-9)) bad <- c(bad, "line_share_of_tornado does not sum to 1 for every tornado")
+  pt <- new_exposure$track_type == "point"
+  if (!identical(is.na(new_exposure$line_km_in_zcta), pt)) bad <- c(bad, "line_km_in_zcta must be NA exactly for tornadoes with no usable end point")
+  al <- tapply(new_exposure$property_loss_allocated, new_exposure$tornado_id, sum); tl <- tapply(new_exposure$property_loss_tornado_total, new_exposure$tornado_id, function(x) x[1])
   if (any(!is.na(tl) & abs(al - tl) > 1e-8 * pmax(1, abs(tl)), na.rm = TRUE)) bad <- c(bad, "allocated loss does not sum back to the tornado total for every tornado with a known loss")
+  if (any(!is.na(new_tracks$line_km_outside_zcta) & (new_tracks$line_km_outside_zcta < 0 | new_tracks$line_km_outside_zcta > new_tracks$line_km + 1e-9))) bad <- c(bad, "line_km_outside_zcta must be between 0 and line_km")
+  if (any(new_exposure$dat_linked) || any(!is.na(new_exposure$dat_exposed))) bad <- c(bad, "the DAT columns of new rows must be empty (build_dat_exposure.R fills them)")
   if (length(bad)) stop("The new rows do not match the stored data, so nothing was written:\n  - ", paste(bad, collapse = "\n  - "), "\nInspect the SPC file and the checks in data-raw/pipeline_functions.R (check_new_rows).", call. = FALSE)
   invisible(TRUE)
 }

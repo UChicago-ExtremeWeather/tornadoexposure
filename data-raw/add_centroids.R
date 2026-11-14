@@ -15,8 +15,10 @@
 #     point on the polygon surface is used instead.
 #   * centroid_in_zcta says whether the final point lies inside its own polygon.
 # Coordinates are NAD83 (EPSG:4269), as computed (not rounded).
-# zcta_land_area_m2 is the Census land area (ALAND) and zcta_polygon_area_m2 the area of the full TIGER/Line ZCTA polygon in EPSG:5070.
+# zcta_land_area_m2 is the Census land area (ALAND), zcta_polygon_area_m2 the area of the full TIGER/Line ZCTA polygon in EPSG:5070, and
+# zcta_land_shape_area_m2 the area of the land-only shape (the polygon minus the Census water polygons inside it, data-raw/land_functions.R).
 source("data-raw/pipeline_functions.R")            # load_zctas(): the full TIGER/Line polygons and their areas, as used for tornado_exposure
+source("data-raw/land_functions.R")
 source("data-raw/population/population_functions.R")
 suppressMessages(library(dplyr))
 states <- pop_states()
@@ -48,8 +50,9 @@ for (v in c(2000, 2010, 2020)) {
   }
   stopifnot(n_pts == n_blocks)   # every block has an internal point
   a <- bind_rows(acc) %>% group_by(ZCTA) %>% summarise(zcta_pop = sum(pop), n_blocks = sum(nb), sx = sum(x), sy = sum(y), sz = sum(z), .groups = "drop")
-  zfull <- load_zctas(v)
-  z <- zcta_layer(v); z$ALAND <- zfull$ALAND[match(z$ZCTA, zfull$ZCTA)]; z$poly_m2 <- zfull$zcta_polygon_area_m2[match(z$ZCTA, zfull$ZCTA)]
+  zfull <- load_zctas(v); zl <- zcta_land(v, cores = as.integer(Sys.getenv("NPROC", "3")))
+  stopifnot(!anyDuplicated(zfull$ZCTA), identical(zl$d$ZCTA, zfull$ZCTA))
+  z <- zcta_layer(v); z$ALAND <- zfull$ALAND[match(z$ZCTA, zfull$ZCTA)]; z$poly_m2 <- zfull$zcta_polygon_area_m2[match(z$ZCTA, zfull$ZCTA)]; z$land_shape_m2 <- zl$d$land_m2[match(z$ZCTA, zfull$ZCTA)]
   # The block data cover the 50 states, DC and Puerto Rico. ZCTAs with no block at
   # all lie outside that area (the 2020 file has Guam, the Northern Marianas,
   # American Samoa and the US Virgin Islands) and get no centroid. Stop if any
@@ -81,7 +84,7 @@ for (v in c(2000, 2010, 2020)) {
   stopifnot(all(inside[!populated]))
   out[[as.character(v)]] <- data.frame(ZCTA = c1$ZCTA, vintage = as.integer(v), lon = lon, lat = lat,
     centroid_type = ifelse(populated, "population", "geometric"), centroid_in_zcta = inside, zcta_pop = as.integer(c1$zcta_pop),
-    zcta_land_area_m2 = z$ALAND, zcta_polygon_area_m2 = z$poly_m2, stringsAsFactors = FALSE)
+    zcta_land_area_m2 = z$ALAND, zcta_polygon_area_m2 = z$poly_m2, zcta_land_shape_area_m2 = z$land_shape_m2, stringsAsFactors = FALSE)
   report[[as.character(v)]] <- c(vintage = v, zctas = nrow(c1), dropped_no_blocks = dropped[[as.character(v)]], zero_resident = sum(!populated), pop_centroid_outside = sum(populated & !inside), geom_moved_to_surface = sum(fix))
 }
 zcta_centroids <- bind_rows(out)
@@ -90,3 +93,4 @@ print(do.call(rbind, report))
 stopifnot(!anyNA(zcta_centroids[, c("ZCTA", "vintage", "lon", "lat", "centroid_type", "centroid_in_zcta", "zcta_pop")]), !anyDuplicated(zcta_centroids[, c("ZCTA", "vintage")]))
 usethis::use_data(zcta_centroids, overwrite = TRUE, compress = "xz")
 cat("zcta_centroids:", nrow(zcta_centroids), "rows,", round(file.size("data/zcta_centroids.rda") / 1024), "KB\n")
+water_provenance()   # URLs, sizes, md5 and dates of the water files used for the land-only shapes

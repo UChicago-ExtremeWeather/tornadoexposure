@@ -1,4 +1,5 @@
-# Full rebuild of the bundled datasets `spc_records`, `tornado_tracks` and `tornado_exposure` (without the population columns), from scratch, for every year.
+# Full rebuild of the bundled datasets `spc_records`, `tornado_tracks` and the SPC rows of `tornado_exposure` (the DAT columns and the DAT-only rows are
+# added by data-raw/dat/build_dat_exposure.R), from scratch, for every year.
 #
 # Source: NOAA Storm Prediction Center (SPC) severe weather database (tornado records) and Census Bureau
 # ZCTA boundaries (full TIGER/Line files via tigris). The processing itself is in data-raw/pipeline_functions.R, shared with the
@@ -7,8 +8,8 @@
 # THIS IS NOT HOW THE DATA ARE UPDATED. A yearly update appends only the new year with data-raw/update_data.R
 # (its header has the instructions). This script rebuilds every year, for
 # verification and for deliberate full rebuilds: SPC revises old records between releases and changes
-# ids, so a full rebuild need not reproduce the stored data. Order of a full rebuild: data-raw/add_centroids.R (zcta_centroids; needs the
-# population cache), this script, data-raw/add_population.R (the modeled population columns), and data-raw/dat/build_dat.R (the DAT datasets).
+# ids, so a full rebuild need not reproduce the stored data. Order of a full rebuild: data-raw/add_population.R (the block cache), data-raw/add_centroids.R
+# (zcta_centroids), this script, data-raw/dat/build_dat.R (the DAT datasets and links) and data-raw/dat/build_dat_exposure.R (the DAT columns and tables).
 # SPC_FILE=<path> rebuilds from an SPC file downloaded earlier instead of downloading today's file (its md5 must be in data-raw/provenance_years.csv).
 
 latest_year <- 2025
@@ -22,18 +23,12 @@ raw <- spc_read(csv_file)
 message("Raw records: ", nrow(raw))
 
 # ---- 2. clean, build geometries, intersect with ZCTAs of the matching vintage ------
-load("data/zcta_centroids.rda")
+load("data/zcta_centroids.rda"); sf::sf_use_s2(FALSE)
 tornadoes <- spc_clean(raw, first_year:latest_year)
 b <- spc_build(tornadoes, zcta_centroids)
 spc_records <- spc_records(raw, first_year:latest_year, tornadoes)
 tornado_tracks <- b$tracks
 tornado_exposure <- b$exposure
-tornado_exposure$modeled_pop_affected <- NA_real_     # filled by data-raw/add_population.R
-tornado_exposure$modeled_pop_prop <- NA_real_
-tornado_exposure <- tornado_exposure[, c("tornado_id", "date", "year", "month", "day", "magnitude", "total_injury", "total_fatality",
-  "property_loss_tornado_total", "track_type", "ZCTA", "boundary_dist_km", "centroid_dist_km", "modeled_intersection_m2", "modeled_area_prop",
-  "modeled_pop_affected", "modeled_pop_prop", "modeled_area_share_of_tornado", "modeled_property_loss_allocated",
-  "zcta_polygon_area_m2", "zcta_land_area_m2", "zcta_pop")]
 
 # ---- 3. save ---------------------------------------------------------------
 
