@@ -1,119 +1,138 @@
 # tornadoexposure
 
-`tornadoexposure` provides ZCTA-level tornado exposure data for the United States, 1996 to 2025, ready to use without assembling it from raw sources. A ZCTA (ZIP Code Tabulation Area) is the Census Bureau's approximation of a ZIP code area.
+`tornadoexposure` tells you which ZIP code areas (ZCTAs) each US tornado exposed, 1996 to 2025. It
+combines two sources of tornado data, kept separate and linked: the Storm Prediction Center's catalog
+of every tornado, and the National Weather Service's damage surveys. A ZCTA (ZIP Code Tabulation Area)
+is the Census Bureau's approximation of a ZIP code area. The data are bundled, so only maps and
+boundary distances need an internet connection.
 
-The package combines two tornado data sources with Census Bureau geography:
-
-1. **SPC tornado records** (NOAA Storm Prediction Center): one record per tornado, with a start point, an end point and a width.
-2. **NWS damage surveys** (NOAA National Weather Service Damage Assessment Toolkit, "DAT"): the NWS's own survey lines, damage polygons and damage points.
-
-Both are described below. Data are bundled with the package, so only maps and boundary distances need an internet connection.
-
-## Set-up
 ```r
 remotes::install_github("UChicago-ExtremeWeather/tornadoexposure")
 library(tornadoexposure)
 ```
 
-## The two data sources
+## The two sources
 
-| | SPC tornado records | NWS damage surveys (DAT) |
-|---|---|---|
-| Provider | NOAA Storm Prediction Center | NOAA National Weather Service |
-| What it describes | Every tornado, as a start point, end point and width | Where NWS surveyors mapped damage, as lines, polygons and points |
-| Coverage | Every tornado from 1996 | Surveys do not cover every tornado. Coverage grows from a few tornadoes in 2007 to most in 2025 |
-| Rating, injuries, fatalities, loss | Yes | Rating only (`efscale`) |
-| Geometry in this package | A straight line from start to end, or a point at the start when there is no usable end point | Unmodified NWS shapes |
-| Main tables | `spc_records`, `tornado_tracks` | `dat_lines`, `dat_polygons`, `dat_points` |
+**SPC (NOAA Storm Prediction Center).** The national catalog of tornadoes. Each tornado has one record:
+a start point, an end point, a length, a width, an EF rating, injuries, deaths and property loss. It
+covers every tornado (38,027 from 1996 to 2025), but the path is only a straight line between two
+points. Before 2007 the coordinates are rounded to about 1 km, and 10,384 tornadoes (27.3%) have no
+usable end point, so they are a single point at the start.
 
-**SPC.** The package draws only the straight line between SPC's start and end points. It draws no polygon from the width. A tornado whose end is missing, 0 or equal to the start is stored as a point at its start (10,384 tornadoes, 27.3%).
+**DAT (NWS Damage Assessment Toolkit).** The National Weather Service's damage surveys: damage points,
+survey lines and damage polygons, which are the NWS's own survey shapes. It covers only surveyed
+tornadoes (a few in 2007, most in 2025), and the data are preliminary. The package holds all of it,
+unmodified: 241,456 points, 13,021 lines and 11,172 polygons.
 
-**DAT.** Every feature the service holds is included at full resolution with every field. The DAT data are preliminary.
+**The link.** Each DAT line is linked to an SPC tornado by closeness, with no cutoff. The distances and
+the rule used are in `tornado_dat_link`. A tornado can have more than one line: for the St. Louis
+tornado of 16 May 2025, NWS surveyed two tornadoes from one storm circulation, while SPC has one
+record. 10,659 of the 37,382 tornadoes in `tornado_exposure` have at least one linked line.
 
-**Linking them.** `tornado_dat_link` links each DAT line to an SPC tornado and reports every number that describes the link (no cutoff applied). A DAT polygon belongs to a tornado when a linked DAT line touches it. Only polygons rated EF0 to EF5 are used.
+## Datasets
 
-## What the package provides
+| Dataset | From | Rows | What it is |
+|---|---|---|---|
+| `spc_records` | SPC | 38,953 | the complete SPC record, as SPC gives it |
+| `tornado_tracks` | SPC | 38,027 | one row per tornado, with the line (or the start point) |
+| `dat_points`, `dat_lines`, `dat_polygons` | DAT | 241,456; 13,021; 11,172 | the survey features, unmodified |
+| `tornado_dat_link` | link | 11,573 | which DAT line goes with which tornado, and how close they are |
+| `dat_polygon_line_link` | link | 466,150 | which polygon touches which line |
+| `tornado_exposure` | SPC and DAT | 57,407 | one row per tornado and exposed ZCTA |
+| `dat_exposure_tract`, `dat_exposure_blockgroup` | DAT | 8,005; 12,308 | the DAT columns of `tornado_exposure` for tracts and block groups |
+| `zcta_centroids` | Census | 98,932 | population-weighted centroids and areas of each ZCTA |
 
-**Exposure table**
+## What "exposed" means
 
-* `tornado_exposure` (57,407 rows, 37,382 tornadoes): one row per tornado and ZCTA exposed by either source. SPC columns describe the line, DAT columns describe the linked NWS polygons (`NA` for a tornado with no linked DAT line).
-* `dat_exposure_tract` (8,005 rows) and `dat_exposure_blockgroup` (12,308 rows): DAT columns only, for census tracts and block groups. There are no SPC columns because SPC positions are not accurate enough to say which tract or block group a tornado crossed.
+* **SPC:** the straight SPC line crosses the ZCTA (`spc_exposed`). For a tornado with no usable end point, it is the ZCTA that contains the start point.
+* **DAT:** a damage polygon of a linked survey covers land in the ZCTA (`dat_exposed`, `NA` without a link).
 
-**SPC**
+`tornado_exposure` has a row for every ZCTA that either source exposes.
 
-* `spc_records` (38,953 rows): the complete SPC record, every column and every row.
-* `tornado_tracks` (38,027 rows): one row per tornado, with geometry.
+## Columns of `tornado_exposure`
 
-**DAT**
+Every column is described in `?tornado_exposure`.
 
-* `dat_lines` (13,021), `dat_polygons` (11,172), `dat_points` (241,456).
-* `tornado_dat_link` (11,573 rows) and `dat_polygon_line_link` (466,150 rows).
+**The tornado (from SPC)**
 
-**Census**
-
-* `zcta_centroids` (98,932 rows): population-weighted centroids and areas by ZCTA and boundary year (2000, 2010, 2020).
-
-### Key variables in `tornado_exposure`
-Full definitions are in `?tornado_exposure`.
-
-| Variable | Description |
+| Column | Description |
 |---|---|
-| `tornado_id`, `date`, `year` | SPC year and record number joined (e.g. `2011_1105221634-01`); date |
-| `ZCTA` | Five-character ZCTA code |
+| `tornado_id`, `date` | SPC year and record number joined (e.g. `2011_1105221634-01`); date |
 | `magnitude` | EF rating 0 to 5 (original Fujita scale before 2007), `NA` if unknown |
-| `total_injury`, `total_fatality` | Whole-tornado totals, repeated on each ZCTA row |
-| `property_loss_tornado_total`, `property_loss_allocated` | SPC loss in nominal dollars for the whole tornado, and the part assigned to the ZCTA by `line_share_of_tornado`. `NA` where SPC recorded 0 |
-| `spc_exposed`, `dat_exposed` | The SPC line crosses the ZCTA, and a linked NWS polygon covers land in it (`NA` without a link) |
-| `line_km_in_zcta`, `line_share_of_tornado` | Kilometers of the line in the ZCTA, and its share of the whole line |
-| `boundary_dist_km`, `centroid_dist_km` | Distance from the SPC line to the ZCTA boundary and to its population-weighted centroid |
-| `dat_area_share`, `dat_area_share_ef0` to `_ef5` | Land-only share of the ZCTA covered by linked polygons, in all and by highest rating |
-| `dat_pop_affected`, `dat_pop_ef0` to `_ef5` | Residents in that land, in all and by highest rating |
-| `dat_points_ef0` to `_ef5`, `_efu`, `_wind`, `_other` | DAT damage points in the ZCTA dated within one day of the tornado, by `efscale` as entered |
-| `other_tornadoes_in_zcta_within_a_day` | Other SPC tornadoes crossing the ZCTA within a day, to flag points that may belong to another tornado |
+| `total_injury`, `total_fatality` | whole-tornado totals, repeated on each ZCTA row; do not add them across rows |
+| `property_loss_tornado_total`, `property_loss_allocated` | SPC loss in nominal dollars, whole tornado and the part assigned to the ZCTA by `line_share_of_tornado`; `NA` where SPC recorded 0 |
 
-## Defining exposure
-A ZCTA is exposed when the SPC line crosses it or a linked NWS polygon covers land in it. In each call you can instead require the ZCTA's population-weighted centroid or boundary to be within a distance of the SPC line. Use at most one of the two.
+**The SPC line in the ZCTA**
 
-## Functions
-All functions take named arguments. Examples use the Joplin, Missouri tornado (EF5, 22 May 2011).
+| Column | Description |
+|---|---|
+| `ZCTA`, `spc_exposed` | the ZCTA, and whether the SPC line crosses it |
+| `line_km_in_zcta`, `line_share_of_tornado` | kilometers of the line in the ZCTA, and its share of the whole line (sums to 1 over a tornado) |
+| `boundary_dist_km`, `centroid_dist_km` | distance from the line to the ZCTA boundary (0 where it crosses) and to the population-weighted centroid |
+| `zcta_pop`, `zcta_land_area_m2` | residents and land area of the ZCTA |
 
-### `get_data()`
-Returns a data frame with one row per tornado-ZCTA pair.
+**The linked DAT survey (`NA` without a link)**
+
+| Column | Description |
+|---|---|
+| `dat_exposed`, `dat_linked`, `dat_line_ids` | whether a linked polygon covers land in the ZCTA; whether the tornado has a linked line; the line ids |
+| `dat_link_dist_km` | the largest distance (km) between the SPC line and a linked DAT line |
+| `dat_area_share` | share of the ZCTA's land covered by the linked polygons (each area counted once) |
+| `dat_pop_affected` | residents living on that covered land |
+| `..._ef0` to `..._ef5` | the same shares and residents split by the highest rating covering each spot (they sum to the total) |
+| `dat_points_ef0` ... `dat_points_other` | DAT damage points in the ZCTA dated within a day of the tornado, by `efscale` as entered |
+| `other_tornadoes_in_zcta_within_a_day` | other SPC tornadoes crossing the ZCTA that day, since a damage point may belong to one of them |
+
+## Using it
+
+`get_data()` returns `tornado_exposure` rows for the ZCTAs and years you ask for. Use named arguments.
 
 * `geo_list`: ZCTAs or prefixes of 1 to 5 digits, as strings (`"648"`).
 * `year_range`: years, for example `2011` or `2010:2015`.
-* `magnitude`: ratings to keep (default all, including unknown). `1:5` keeps EF1 and above and drops unknown; `c(1:5, NA)` keeps unknown too.
-* `centroid_dist_km`, `boundary_dist_km`: a positive distance in km, with no upper limit. Boundary distances download the full TIGER/Line boundaries (about 524 MB for 2010, cached).
+* `magnitude`: ratings to keep (default all, including unknown). `1:5` drops unknown ratings; `c(1:5, NA)` keeps them.
+* `centroid_dist_km` or `boundary_dist_km`: use one, with a positive distance in km and no upper limit, to also get ZCTAs the line does not cross but comes within that distance of (the centroid is the average location of the ZCTA's residents).
 
-Every call prints how many tornadoes in the request have no usable end point.
+**SPC only: the Joplin tornado (EF5, 22 May 2011).** No NWS survey is linked to it.
 
 ```r
 get_data(geo_list = "648", year_range = 2011, magnitude = 5)[
-  c("ZCTA", "spc_exposed", "dat_exposed", "line_km_in_zcta", "line_share_of_tornado")]
-#>    ZCTA spc_exposed dat_exposed line_km_in_zcta line_share_of_tornado
-#> 1 64804        TRUE          NA          16.952                 0.500
-#> 2 64840        TRUE          NA          11.639                 0.343
-#> 3 64844        TRUE          NA           5.297                 0.156
+  c("ZCTA", "spc_exposed", "line_km_in_zcta", "line_share_of_tornado")]
+#>    ZCTA spc_exposed line_km_in_zcta line_share_of_tornado
+#> 1 64804        TRUE          16.952                 0.500
+#> 2 64840        TRUE          11.639                 0.343
+#> 3 64844        TRUE           5.297                 0.156
 ```
 
-The DAT columns are `NA` because no NWS survey line is linked to the Joplin tornado.
+**SPC and DAT: the St. Louis tornado (16 May 2025).** The link table shows the two NWS lines that go with
+the one SPC record:
 
 ```r
-get_data(geo_list = "648", year_range = 2011, magnitude = 5, centroid_dist_km = 10)
-get_data(geo_list = "648", year_range = 2011, magnitude = 5, boundary_dist_km = 5)
+tornado_dat_link[tornado_dat_link$tornado_id == "2025_2505161339-01",
+  c("dat_line_id", "index_aligned_dist_km", "one_sided_dist_km", "rule")]
+#>       dat_line_id index_aligned_dist_km one_sided_dist_km               rule
+#> 10957     2671572                 8.989             1.294     mutual_closest
+#> 10958     2671973                 9.105             1.478 attached_to_paired
 ```
 
-The distances are examples, not recommendations. To save a result:
+The SPC line crosses 12 ZCTAs and the NWS polygons cover land in 13; 9 are in both and 4 only in the
+polygons. For example (first five of 16 rows):
 
 ```r
-write.csv(get_data(geo_list = "648", year_range = 2011, magnitude = 5),
-          "joplin.csv", row.names = FALSE)
+head(get_data(geo_list = stl_z, year_range = 2025, magnitude = 2)[
+  c("ZCTA", "spc_exposed", "dat_exposed", "line_share_of_tornado", "dat_area_share")], 5)
+#>    ZCTA spc_exposed dat_exposed line_share_of_tornado dat_area_share
+#> 1 62025        TRUE        TRUE                 0.225          0.008
+#> 2 62026        TRUE        TRUE                 0.040          0.003
+#> 3 62040        TRUE        TRUE                 0.265          0.062
+#> 4 62048        TRUE        TRUE                 0.098          0.015
+#> 5 63105        TRUE        TRUE                 0.044          0.449
 ```
 
-### `map_exposure()`
-Takes the same arguments as `get_data()` and draws the layers named in `layers`: `"zcta"`, tract and block-group boundaries, `"spc_tracks"`, `"dat_lines"`, `"dat_polygons"` (colored by EF rating) and damage points.
-
-`feature` fills the ZCTAs: `"tornado_id"` maps the number of tornadoes, `"magnitude"` the average rating, `"total_fatality"` and `"total_injury"` the sums. Injury and fatality columns hold whole-tornado totals repeated on each ZCTA row, so these sums are not counts of people.
+**Maps.** `map_exposure()` takes the same arguments and draws ZCTA, tract and block-group boundaries and
+the SPC lines, plus the DAT lines, polygons (colored by rating) and points when you list them in `layers`.
+`feature` fills the ZCTAs with the number of tornadoes (`"tornado_id"`), the average rating
+(`"magnitude"`), or the sum of `"total_fatality"` or `"total_injury"` (whole-tornado totals repeated on
+each ZCTA row, so not counts of people).
 
 ```r
 map_exposure(geo_list = "648", year_range = 2011, feature = "tornado_id")
@@ -121,51 +140,35 @@ map_exposure(geo_list = "648", year_range = 2011, feature = "tornado_id")
 
 ![](figures/map-count-1.png)
 
-The first call downloads Census boundaries and caches them (2000 boundaries for years before 2010, 680 MB; 2010 for 2010 to 2019, 524 MB; 2020 from 2020, 528 MB).
-
-### Example with both sources: St. Louis, 16 May 2025
-The NWS surveyed this storm as two tornadoes (an EF3 and an EF1), while SPC's file holds one record. `tornado_dat_link` links the SPC record to both survey lines:
-
-```r
-tornado_dat_link[tornado_dat_link$tornado_id == "2025_2505161339-01",
-  c("dat_line_id", "index_aligned_dist_km", "one_sided_dist_km", "rule")]
-```
-
-The SPC line crosses 12 ZCTAs and NWS polygons cover land in 13; 4 are exposed only by the polygons.
-
-```r
-map_exposure(geo_list = stl_z, year_range = 2025, magnitude = 2,
-             layers = c("zcta", "spc_tracks", "dat_polygons", "dat_lines"))
-```
-
-![](figures/map-stl-1.png)
+The first map downloads the Census boundaries for the year (524 MB for 2010, 680 MB for 2000, 528 MB
+for 2020) and caches them.
 
 ## Limitations
-Counts and methods for each item are in `data-raw/known_issues.md`.
 
-* **Straight lines.** The SPC line is straight from start to end. Real paths curve. `line_share_of_tornado` and `property_loss_allocated` assume damage is spread evenly along the line.
-* **No usable end point.** 27.3% of tornadoes are stored as a point at the start. Such a tornado is exposed only in the ZCTA containing its start.
-* **Coordinate precision.** Before 2007 SPC coordinates are rounded to 0.01 degrees (about 1.1 km of latitude); from 2007 to 0.0001 degrees (about 11 m). The list of exposed ZCTAs is sensitive to this before 2007.
-* **Survey coverage.** DAT columns exist only for tornadoes with a linked survey line. Damage points are not linked to tornadoes by any rule.
-* **Link quality.** `tornado_dat_link` has no cutoff. Filter on `one_sided_dist_km` and `dat_link_dist_km` for your purpose.
-* **Unknown ratings.** 1,546 tornadoes have no rating (`NA`), mostly from 2016 on. Include them when comparing EF0 counts across years.
-* **Loss.** SPC loss is `NA` where SPC recorded 0, which NOAA says does not mean $0. Values are nominal dollars.
-* **Boundaries.** Exposure uses the Census boundary year matching the tornado year. The same ZCTA code can cover a different area across boundary years.
-* **Population.** Residents are allocated from census blocks by the share of block land covered. 2020 counts include Census disclosure-avoidance noise.
-* **`tornado_id`.** Unique within a package version, but not stable across SPC releases from 2007 on.
-* **License.** No license text was found for the DAT data. This package does not claim they are in the public domain.
+Numbers, and how each was computed: `data-raw/known_issues.md`.
+
+* **SPC paths are straight lines.** Coordinates are rounded to about 1 km before 2007 (about 11 m from 2007). In a simulation that moves them by the rounding amount, the ZCTA list changes for 7.0% of tornadoes before 2007 and 0.2% from 2007.
+* **27.3% of tornadoes have no usable end point.** They are a point at the start, and the real path may extend up to the reported length in an unknown direction.
+* **DAT covers only surveyed tornadoes,** is preliminary, and the accuracy of the NWS polygons has not been measured. Damage points are not tied to a tornado; check `other_tornadoes_in_zcta_within_a_day`.
+* **Links have no cutoff.** Filter on `dat_link_dist_km` and `boundary_dist_km` for your purpose. 724 rows (289 tornadoes) are exposed only by DAT polygons, and for 43 of those tornadoes some of these ZCTAs are more than 5 km from the SPC line, because some polygons are very large (the largest covers 220 ZCTAs). 5 km is an example, not a recommendation.
+* **SPC and the NWS can disagree** on how many tornadoes an event was (St. Louis). SPC's 2025 file predates the NWS update of 15 May 2026.
+* **SPC loss is `NA` where SPC recorded 0** (19,567 tornadoes), which NOAA says does not mean $0.
+* **Unknown ratings exist only from 2016 on, apart from 21 in 2007.** Include them when comparing EF0 counts across years.
+* **ZCTA codes change area between Census years.** Exposure uses the boundaries (2000, 2010 or 2020) that match the tornado's year.
+* **645 tornadoes (1.7%) cross no ZCTA** and have no rows.
+* **`tornado_id`** is not stable across SPC releases from 2007 on.
 
 ## Citation
-To cite the package, use https://doi.org/10.5281/zenodo.23544841. See `citation("tornadoexposure")`.
 
 Data sources:
 
 * NOAA Storm Prediction Center, [Severe Weather Database](https://www.spc.noaa.gov/wcm/) (accessed 2026-10-12).
-* NOAA National Weather Service [Damage Assessment Toolkit](https://apps.dat.noaa.gov/StormDamage/DamageViewer/) (queried 2026-11-11).
-* U.S. Census Bureau, TIGER/Line ZCTA boundary files for [2000](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/) and [2020](https://www2.census.gov/geo/tiger/TIGER2020/ZCTA520/) (accessed 2026-10-12).
-* U.S. Census Bureau, TIGER/Line tabulation block files ([2000](https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2010/), [2020](https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/)); the 2020 files also hold block population (accessed 2026-10-12).
-* U.S. Census Bureau, TIGER/Line water polygons ([2010](https://www2.census.gov/geo/tiger/TIGER2010/AREAWATER/), [2020](https://www2.census.gov/geo/tiger/TIGER2020/AREAWATER/)) (accessed 2026-11-12).
-* U.S. Census Bureau, decennial population counts ([2000](https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/), [2010](https://www2.census.gov/census_2010/01-Redistricting_File--PL_94-171/)) (accessed 2026-10-12).
+* NOAA National Weather Service, [Damage Assessment Toolkit](https://apps.dat.noaa.gov/StormDamage/DamageViewer/) (queried 2026-11-11). The stewards describe it as intended for public access and use ([page](https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat)); no license text was found, and this package does not claim the data are in the public domain.
+* U.S. Census Bureau, TIGER/Line ZCTA boundaries ([2000](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/ZCTA5/2010/), [2020](https://www2.census.gov/geo/tiger/TIGER2020/ZCTA520/)), tabulation blocks ([2000](https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2000/), [2010](https://www2.census.gov/geo/tiger/TIGER2010/TABBLOCK/2010/), [2020](https://www2.census.gov/geo/tiger/TIGER2020/TABBLOCK20/)) and water polygons ([2010](https://www2.census.gov/geo/tiger/TIGER2010/AREAWATER/), [2020](https://www2.census.gov/geo/tiger/TIGER2020/AREAWATER/)) (accessed 2026-10-12, water 2026-11-12), and the population counts of 2000 and 2010 ([2000](https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/), [2010](https://www2.census.gov/census_2010/01-Redistricting_File--PL_94-171/)).
+
+To cite the package, use https://doi.org/10.5281/zenodo.23544841. See `citation("tornadoexposure")`.
 
 ## Acknowledgements
-This work was supported by the Institute for Climate and Sustainable Growth (ISCG) and the Center for Climate, Health and Society (CHAS).
+
+This work was supported by the Institute for Climate and Sustainable Growth (ISCG) and the Center for
+Climate, Health and Society (CHAS).
