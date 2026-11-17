@@ -97,10 +97,10 @@
 #'   \item{date}{Date of the tornado.}
 #'   \item{year, month, day}{Year, month and day of the tornado.}
 #'   \item{magnitude}{EF rating from 0 to 5 (the Enhanced Fujita scale from 2007; the
-#'     original Fujita scale before 2007), or `NA` when SPC records the rating as unknown. Unknown
-#'     ratings first occur in `r format(min(tornado_tracks$date[is.na(tornado_tracks$magnitude)]), "%Y")`
-#'     and are more common after, so counts of EF0 tornadoes are not comparable
-#'     across years unless unknown ratings are included (see `data-raw/known_issues.md`
+#'     original Fujita scale before 2007), or `NA` when SPC records the rating as unknown.
+#'     `r local({ y <- as.integer(format(tornado_tracks$date, "%Y")); u <- tapply(is.na(tornado_tracks$magnitude), y, sum); q <- 100 * u / table(y); yy <- as.integer(names(u)); stopifnot(all(u[yy <= 2006] == 0), all(u[yy %in% 2008:2015] == 0), all(u[yy >= 2016] > 0)); paste0("There are no unknown ratings in 1996 to 2006, ", u[["2007"]], " in 2007, none in 2008 to 2015, and some in every year from 2016 to 2025 (", min(u[yy >= 2016]), " to ", max(u[yy >= 2016]), " tornadoes a year, ", sprintf("%.1f", min(q[yy >= 2016])), "% to ", sprintf("%.1f", max(q[yy >= 2016])), "% of the year).") })`
+#'     Counts of EF0 tornadoes are comparable across years only if unknown ratings are
+#'     included, and this matters from 2016 on (see `data-raw/known_issues.md`
 #'     for the counts by year).}
 #'   \item{total_injury}{Injuries from the whole tornado (tornado-level total,
 #'     repeated on every row of the tornado).}
@@ -123,6 +123,7 @@
 #'   \item{zcta_land_shape_area_m2}{Area of the land-only shape of the ZCTA (the polygon minus the Census water polygons inside it), in square meters (EPSG:5070); the denominator of the DAT area shares.}
 #'   \item{dat_linked}{`TRUE` when the tornado has at least one linked DAT line ([tornado_dat_link]).}
 #'   \item{dat_line_ids}{`objectid` of the linked lines in [dat_lines], separated by `;`; `NA` without a link.}
+#'   \item{dat_link_dist_km}{The largest one-sided distance (km) among the tornado's linked DAT lines, `one_sided_dist_km` of [tornado_dat_link]; `NA` exactly where `dat_linked` is `FALSE`. The value for each line is in [tornado_dat_link]. No cutoff is applied: filter on this and on `boundary_dist_km` for your purpose.}
 #'   \item{dat_exposed}{`TRUE` when a linked NWS polygon covers some land in the ZCTA; `NA` for a tornado with no link.}
 #'   \item{dat_area_share}{Share of the ZCTA's land-only area covered by the union of the tornado's linked NWS polygons (EF0 to EF5), each area counted once; `NA` without a link.}
 #'   \item{dat_area_share_ef0, dat_area_share_ef1, dat_area_share_ef2, dat_area_share_ef3, dat_area_share_ef4, dat_area_share_ef5}{The part of `dat_area_share` whose highest rated linked polygon has that rating. They sum to `dat_area_share`.}

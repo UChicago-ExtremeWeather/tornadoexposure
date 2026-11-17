@@ -180,6 +180,7 @@
     n$zcta_pop <- as.numeric(cc$zcta_pop); n$zcta_land_area_m2 <- cc$zcta_land_area_m2
     n$zcta_polygon_area_m2 <- cc$zcta_polygon_area_m2; n$zcta_land_shape_area_m2 <- cc$zcta_land_shape_area_m2
     n$dat_linked <- linked; n$dat_line_ids <- unname(ids[new$tornado_id])
+    n$dat_link_dist_km <- as.numeric(.dat_link_dist()[new$tornado_id])
     n$dat_exposed <- ifelse(linked, FALSE, NA)
     zero <- function(x) ifelse(linked, x, NA_real_)
     for (nm in grep("^dat_(area_share|pop)", names(stored), value = TRUE)) n[[nm]] <- zero(0)
@@ -188,6 +189,12 @@
   }
   out <- do.call(rbind, parts)
   out[order(out$date, out$tornado_id, out$ZCTA), , drop = FALSE]
+}
+
+# the largest one-sided distance among the linked DAT lines of each tornado, as in the column dat_link_dist_km
+.dat_link_dist <- function() {
+  lk <- tornadoexposure::tornado_dat_link
+  tapply(lk$one_sided_dist_km, lk$tornado_id, max)
 }
 
 # the linked DAT line ids of each tornado, as in the column dat_line_ids

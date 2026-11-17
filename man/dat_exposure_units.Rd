@@ -12,14 +12,15 @@ A data frame with the variables:
 \item{tornado_id}{As in \link{tornado_exposure}.}
 \item{GEOID}{Census tract (11 characters) or block group (12 characters) code.}
 \item{tract_pop, tract_land_area_m2, tract_land_shape_area_m2 (blockgroup_pop, blockgroup_land_area_m2, blockgroup_land_shape_area_m2 in \code{dat_exposure_blockgroup})}{Population (sum of the blocks), Census land area (sum of the blocks' \code{ALAND}) and land-only area (sum of the blocks' land-only shapes, in square meters, EPSG:5070) of the unit.}
+\item{dat_link_dist_km}{As in \link{tornado_exposure}; never \code{NA} here, because every row belongs to a tornado with a linked DAT line.}
 \item{dat_area_share, dat_area_share_ef0 to dat_area_share_ef5}{As in \link{tornado_exposure}, for the unit's land-only area.}
 \item{dat_pop_affected, dat_pop_ef0 to dat_pop_ef5}{As in \link{tornado_exposure}, in residents.}
 \item{dat_points_ef0 to dat_points_ef5, dat_points_efu, dat_points_wind, dat_points_other}{Counts of NWS damage points in the unit dated within one day of the tornado, by \code{efscale} as entered.}
 }
 
-An object of class \code{data.frame} with 8005 rows and 28 columns.
+An object of class \code{data.frame} with 8005 rows and 29 columns.
 
-An object of class \code{data.frame} with 12308 rows and 28 columns.
+An object of class \code{data.frame} with 12308 rows and 29 columns.
 }
 \source{
 Built by \code{data-raw/dat/build_dat_exposure.R} from \link{dat_polygons}, \link{dat_points}, \link{tornado_dat_link}, \link{dat_polygon_line_link} and the Census Bureau TIGER/Line tabulation blocks and water polygons.

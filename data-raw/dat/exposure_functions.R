@@ -98,3 +98,9 @@ block_pass <- function(vintage, st, zones, pts, cores = 1) {
   list(pieces = pc, pieces_polygon = pcp, blocks = blk, points = pb, invalid_repaired = inv, blocks_water_touched = length(L$water_touched), blocks_read = nrow(b),
        no_land = c(blocks = sum(no_land), with_residents = length(fb), residents = sum(blk$pop[fb]), largest_residue_m2 = if (length(residue)) max(residue) else 0, aland_positive = sum(no_land & blk$ALAND > 0)))
 }
+
+# The largest one-sided distance (km) among a tornado's linked DAT lines, from tornado_dat_link; NA where the tornado has no linked line.
+link_dist_max <- function(tornado_id, link) {
+  m <- tapply(link$one_sided_dist_km, link$tornado_id, max)
+  as.numeric(m[match(tornado_id, names(m))])
+}

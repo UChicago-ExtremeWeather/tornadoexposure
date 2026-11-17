@@ -6,7 +6,7 @@
 \title{Tornado exposure by ZCTA}
 \format{
 A data frame with 57,407
-rows and 48 variables:
+rows and 49 variables:
 \describe{
 \item{tornado_id}{Tornado identifier made from the SPC year and \code{om}
 columns (for example \code{"2011_1105221634-01"}: the year, then SPC's record
@@ -15,10 +15,10 @@ share a year and \code{om} in SPC are suffixed \verb{_1} and \verb{_2}.}
 \item{date}{Date of the tornado.}
 \item{year, month, day}{Year, month and day of the tornado.}
 \item{magnitude}{EF rating from 0 to 5 (the Enhanced Fujita scale from 2007; the
-original Fujita scale before 2007), or \code{NA} when SPC records the rating as unknown. Unknown
-ratings first occur in 2007
-and are more common after, so counts of EF0 tornadoes are not comparable
-across years unless unknown ratings are included (see \code{data-raw/known_issues.md}
+original Fujita scale before 2007), or \code{NA} when SPC records the rating as unknown.
+There are no unknown ratings in 1996 to 2006, 21 in 2007, none in 2008 to 2015, and some in every year from 2016 to 2025 (17 to 268 tornadoes a year, 1.5\% to 20.3\% of the year).
+Counts of EF0 tornadoes are comparable across years only if unknown ratings are
+included, and this matters from 2016 on (see \code{data-raw/known_issues.md}
 for the counts by year).}
 \item{total_injury}{Injuries from the whole tornado (tornado-level total,
 repeated on every row of the tornado).}
@@ -41,6 +41,7 @@ recorded 0 or no value (see Property loss).}
 \item{zcta_land_shape_area_m2}{Area of the land-only shape of the ZCTA (the polygon minus the Census water polygons inside it), in square meters (EPSG:5070); the denominator of the DAT area shares.}
 \item{dat_linked}{\code{TRUE} when the tornado has at least one linked DAT line (\link{tornado_dat_link}).}
 \item{dat_line_ids}{\code{objectid} of the linked lines in \link{dat_lines}, separated by \verb{;}; \code{NA} without a link.}
+\item{dat_link_dist_km}{The largest one-sided distance (km) among the tornado's linked DAT lines, \code{one_sided_dist_km} of \link{tornado_dat_link}; \code{NA} exactly where \code{dat_linked} is \code{FALSE}. The value for each line is in \link{tornado_dat_link}. No cutoff is applied: filter on this and on \code{boundary_dist_km} for your purpose.}
 \item{dat_exposed}{\code{TRUE} when a linked NWS polygon covers some land in the ZCTA; \code{NA} for a tornado with no link.}
 \item{dat_area_share}{Share of the ZCTA's land-only area covered by the union of the tornado's linked NWS polygons (EF0 to EF5), each area counted once; \code{NA} without a link.}
 \item{dat_area_share_ef0, dat_area_share_ef1, dat_area_share_ef2, dat_area_share_ef3, dat_area_share_ef4, dat_area_share_ef5}{The part of \code{dat_area_share} whose highest rated linked polygon has that rating. They sum to \code{dat_area_share}.}

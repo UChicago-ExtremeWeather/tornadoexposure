@@ -131,6 +131,7 @@ all_rows <- bind_rows(spc_rows[, names(spc_rows)[names(spc_rows) %in% names(d)]]
 all_rows$vint <- vint_of(all_rows$year); rk <- paste(all_rows$tornado_id, all_rows$ZCTA)
 lnk <- aggregate(dat_line_id ~ tornado_id, data = tornado_dat_link, FUN = function(x) paste(sort(x), collapse = ";"))
 all_rows$dat_linked <- all_rows$tornado_id %in% tornado_dat_link$tornado_id; all_rows$dat_line_ids <- lnk$dat_line_id[match(all_rows$tornado_id, lnk$tornado_id)]
+all_rows$dat_link_dist_km <- link_dist_max(all_rows$tornado_id, tornado_dat_link)
 zi <- match(rk, key_z); lk <- all_rows$dat_linked
 for (j in 0:5) {
   a_ <- zdat[[paste0("dat_area_share_ef", j)]][zi]; all_rows[[paste0("dat_area_share_ef", j)]] <- ifelse(lk, ifelse(is.na(a_), 0, a_), NA_real_)
@@ -148,7 +149,7 @@ all_rows$other_tornadoes_in_zcta_within_a_day <- ifelse(lk, tot - ifelse(all_row
 cols <- c("tornado_id", "date", "year", "month", "day", "magnitude", "total_injury", "total_fatality", "property_loss_tornado_total", "track_type", "ZCTA",
           "spc_exposed", "line_km_in_zcta", "line_share_of_tornado", "property_loss_allocated", "centroid_dist_km", "boundary_dist_km",
           "zcta_pop", "zcta_land_area_m2", "zcta_polygon_area_m2", "zcta_land_shape_area_m2",
-          "dat_linked", "dat_line_ids", "dat_exposed", "dat_area_share", area_cols, "dat_pop_affected", pop_cols,
+          "dat_linked", "dat_line_ids", "dat_link_dist_km", "dat_exposed", "dat_area_share", area_cols, "dat_pop_affected", pop_cols,
           paste0("dat_points_ef", 0:5), "dat_points_efu", "dat_points_wind", "dat_points_other", "other_tornadoes_in_zcta_within_a_day")
 tornado_exposure <- all_rows[order(all_rows$tornado_id, all_rows$ZCTA), cols]; rownames(tornado_exposure) <- NULL
 tornado_exposure$date <- as.Date(tornado_exposure$date)
@@ -173,6 +174,7 @@ unit_table <- function(nchar_id, name) {
   k <- strsplit(rownames(A), " "); out <- data.frame(tornado_id = vapply(k, `[`, "", 1), GEOID = vapply(k, `[`, "", 2), stringsAsFactors = FALSE)
   out$vint <- vint_of(as.integer(substr(out$tornado_id, 1, 4))); dm <- den[match(paste(out$vint, out$GEOID), paste(den$vint, den$unit)), ]
   out[[paste0(name, "_pop")]] <- dm$pop; out[[paste0(name, "_land_area_m2")]] <- dm$land_area_m2; out[[paste0(name, "_land_shape_area_m2")]] <- dm$land_shape_area_m2
+  out$dat_link_dist_km <- link_dist_max(out$tornado_id, tornado_dat_link)
   out$dat_area_share <- rowSums(A); for (j in 0:5) out[[paste0("dat_area_share_ef", j)]] <- A[, j + 1]
   out$dat_pop_affected <- rowSums(R); for (j in 0:5) out[[paste0("dat_pop_ef", j)]] <- R[, j + 1]
   # points in the unit, within one day of the tornado
