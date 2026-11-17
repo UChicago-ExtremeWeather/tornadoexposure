@@ -22,9 +22,9 @@ Numbers below were computed by the scripts in `data-raw/qa/` from the data built
 |---|---|---|---|---|
 | `spc_records` | SPC, every tornado record from 1996 on, every column and every row (all `sg`), as SPC gives them | 38,953 | 32 | 0.77 MB |
 | `tornado_tracks` | SPC, one row per tornado (whole-track record): a line from the raw start to the raw end point, or a point at the start for a tornado with no usable end point; SPC's raw coordinates, length and width; loss as given and in dollars | 38,027 | 18 + geometry | 1.35 MB |
-| `tornado_exposure` | one row per tornado and ZCTA that the SPC line crosses or a linked NWS polygon covers land in: line length and share, distances (`boundary_dist_km`, `centroid_dist_km`), ZCTA areas and population, and the DAT columns (area and residents by rating, damage point counts) | 57,407 | 48 | 2.50 MB |
-| `dat_exposure_tract` | NWS columns only, one row per tornado and census tract that a linked NWS polygon covers land in: land-only area share and residents by rating, damage point counts | 8,005 | 28 | 0.35 MB |
-| `dat_exposure_blockgroup` | as `dat_exposure_tract`, for census block groups | 12,308 | 28 | 0.50 MB |
+| `tornado_exposure` | one row per tornado and ZCTA that the SPC line crosses or a linked NWS polygon covers land in: line length and share, distances (`boundary_dist_km`, `centroid_dist_km`), ZCTA areas and population, and the DAT columns (area and residents by rating, damage point counts) | 57,407 | 49 | 2.58 MB |
+| `dat_exposure_tract` | NWS columns only, one row per tornado and census tract that a linked NWS polygon covers land in: land-only area share and residents by rating, damage point counts | 8,005 | 29 | 0.37 MB |
+| `dat_exposure_blockgroup` | as `dat_exposure_tract`, for census block groups | 12,308 | 29 | 0.52 MB |
 | `zcta_centroids` | Census, one population-weighted centroid per ZCTA and boundary year, with the ZCTA's population, polygon area and land area | 98,932 | 10 | 2.90 MB |
 | `dat_points` | NWS Damage Assessment Toolkit, every damage point, all fields, unmodified | 241,456 | 28 + geometry | 12.89 MB |
 | `dat_lines` | NWS Damage Assessment Toolkit, every damage line (centerline of a surveyed track), all fields, unmodified | 13,021 | 32 + geometry | 3.09 MB |
@@ -32,7 +32,7 @@ Numbers below were computed by the scripts in `data-raw/qa/` from the data built
 | `tornado_dat_link` | one row per DAT line linked to an SPC tornado, with every number that describes the link | 11,573 | 13 | 0.47 MB |
 | `dat_polygon_line_link` | one row per DAT polygon and line dated within a day of each other: distance and the share of the line inside the polygon | 466,150 | 4 | 3.22 MB |
 
-The files in `data/` add up to 31.44 MB. Census inputs (ZCTA boundaries, block populations and shapes, water polygons) are read when the data are built and are not shipped; maps and the boundary distance download the full TIGER/Line files (sizes in `?get_data` and `?map_exposure`).
+The files in `data/` add up to 31.56 MB. Census inputs (ZCTA boundaries, block populations and shapes, water polygons) are read when the data are built and are not shipped; maps and the boundary distance download the full TIGER/Line files (sizes in `?get_data` and `?map_exposure`).
 <!-- provides:end -->
 
 <!-- fidelity:start -->
@@ -185,6 +185,8 @@ The land-only shape reproduces `ALAND` for 99.25% of the 2020 ZCTAs within 1%. T
 | `tornado_exposure` | 57,407 | 37,382 |
 | `dat_exposure_tract` | 8,005 | 3,046 |
 | `dat_exposure_blockgroup` | 12,308 | 3,046 |
+
+**DAT-only rows far from the SPC line.** Of the 724 DAT-only rows (`spc_exposed` `FALSE` and `dat_exposed` `TRUE`) in 289 tornadoes, for 246 tornadoes every such row lies within 5 km of the SPC line (`boundary_dist_km`); the others are farther: 379 rows (43 tornadoes) beyond 5 km, 256 (17) beyond 25 km and 112 (5) beyond 100 km, the farthest 386.43 km. These are probably wrong links or surveys of another tornado. No cutoff is applied: 5, 25 and 100 km are descriptive values, not recommendations, and `dat_link_dist_km` (the largest one-sided distance among the tornado's linked lines, from `tornado_dat_link`; `NA` where `dat_linked` is `FALSE`) and `boundary_dist_km` can be used to filter.
 
 **By rating** (a part of the footprint is given the highest rating that covers it):
 
@@ -345,7 +347,7 @@ A tornado has no usable end point when SPC's end coordinates are missing, equal 
 | 1996-2006 | 72.2% | 28.1% | none |
 | 2007 on | 17.1% | 1.9% | 22.5% |
 
-**Plain reading.** 81.4% of these tornadoes are EF0 and the median reported length is 0.20 mile, but SPC gives a length above 0 for 98.9% of them, 1,448 are 1 mile or longer, 117 are 5 miles or longer, and the longest is 80.0 miles, so they are not all brief touchdowns: the real path may extend up to the reported length from the start point in an unknown direction. The share follows the era more than the strength: between 1996-2006 and 2007 on it falls by 55 percentage points among EF0 tornadoes and 26 points among EF1 to EF5, while within 1996-2006 it differs by 44 points between EF0 and EF1 to EF5 (15 points from 2007 on). Coordinates before 2007 are rounded to 0.01 degrees, so start and end points of short tornadoes often coincide.
+**Plain reading.** 81.4% of these tornadoes are EF0 (84.2% of those with a rating) and the median reported length is 0.20 mile, but SPC gives a length above 0 for 98.9% of them, 1,448 are 1 mile or longer, 117 are 5 miles or longer, and the longest is 80.0 miles, so they are not all brief touchdowns: the real path may extend up to the reported length from the start point in an unknown direction. The share follows the era more than the strength: between 1996-2006 and 2007 on it falls by 55 percentage points among EF0 tornadoes and 26 points among EF1 to EF5, while within 1996-2006 it differs by 44 points between EF0 and EF1 to EF5 (15 points from 2007 on). Coordinates before 2007 are rounded to 0.01 degrees, so start and end points of short tornadoes often coincide.
 <!-- no-end-point:end -->
 
 <!-- distance:start -->
@@ -370,9 +372,9 @@ A call uses one exposure definition. The default returns the rows of `tornado_ex
 |---|---|---|---|---|---|
 | 1 | 4,843 | 33,767 | 4 | 8.2% | 4.6% |
 | 5 | 36,736 | 16,408 | 11 | 45.4% | 30.0% |
-| 10 | 103,695 | 5,419 | 23 | 76.3% | 58.3% |
-| 25 | 504,343 | 343 | 101 | 98.0% | 89.0% |
-| 50 | 1,774,382 | 13 | 345 | 99.8% | 96.8% |
+| 10 | 103,695 | 5,419 | 24 | 76.3% | 58.3% |
+| 25 | 504,343 | 343 | 103 | 98.0% | 89.0% |
+| 50 | 1,774,382 | 13 | 352 | 99.8% | 96.8% |
 
 The result of a centroid-distance call is not a superset of the SPC-exposed set: a large ZCTA crossed at its edge can have a centroid farther than the radius, as the share of exposed pairs within each radius shows. The distance from the SPC line to the centroid is measured in a projection that suits the region (EPSG:5070 in the 48 states, EPSG:3338 in Alaska, ESRI:102007 in Hawaii, EPSG:32161 in Puerto Rico).
 <!-- distance:end -->
@@ -445,7 +447,7 @@ Every notice found about the DAT data (`dat_points`, `dat_lines`, `dat_polygons`
 <!-- no-zcta:start -->
 ## Tornadoes without a ZCTA
 
-645 of 38,027 tornadoes (1.70%) have no SPC row in tornado_exposure (the SPC line crosses no ZCTA of their Census boundary year, or the start point lies in none). 645 of them have no row at all; the others have rows that only linked NWS polygons expose (`spc_exposed` `FALSE`). They stay in `tornado_tracks`, and their property loss is not assigned to any ZCTA. They fall in three categories, defined by rules:
+645 of 38,027 tornadoes (1.70%) have no SPC row in tornado_exposure (the SPC line crosses no ZCTA of their Census boundary year, or the start point lies in none). All 645 have no row at all (no linked NWS polygon covers land in a ZCTA either). They stay in `tornado_tracks`, and their property loss is not assigned to any ZCTA. They fall in three categories, defined by rules:
 
 * **Over water** (115): the track does not touch state land in the Census cartographic boundary file of the states (2020, 1:500,000).
 * **Over land, no ZCTA nearby** (397): the track touches state land, and more than 50% of the land within 3 km of the path is not covered by any ZCTA of the tornado's boundary year (median share of that land not covered: 91%). The 3 km and 50% are values chosen to describe the cases, not tested choices.
@@ -569,7 +571,7 @@ A tornado in such an area has no exposure row for it. To estimate how many 1996-
 <!-- special-cases:start -->
 ## Ratings by year, special tracks and territories
 
-Unknown ratings (`magnitude` is `NA`) are absent before 2007 (0 unknown ratings in 1996 to 2006) and grow after: 1,546 of 24,162 tornadoes from 2007 on (6.4%). Counts of EF0 tornadoes are therefore not comparable across years unless unknown ratings are included. Tornadoes per year by rating:
+Unknown ratings (`magnitude` is `NA`): 1,546 of 38,027 tornadoes. There are none in 1996 to 2006, 21 in 2007 (1.9% of that year), none in 2008 to 2015, and some in every year from 2016 to 2025: 17 to 268 a year (1.5% to 20.3% of the tornadoes of the year). Counts of EF0 tornadoes are comparable across years only if unknown ratings are included, and this matters from 2016 on. Tornadoes per year by rating:
 
 | year | EF0 | EF1 to EF5 | unknown | share unknown |
 |---|---|---|---|---|
@@ -646,5 +648,5 @@ Every constant in the code that is not a source value, with its definition, valu
 <!-- unchecked:start -->
 ## Numbers that no script recomputes
 
-`data-raw/qa/check_documented_claims.R` matches 42 numbers or statements in the help pages, the README and the code against the data (the generated blocks of this file are written by the QA scripts from the data). In this file 63 numbers outside the generated blocks are not matched: quoted source text of external documents, dates and urls, and values read from external documents. They are listed in `data-raw/qa/out/numbers_without_a_script.csv` and are not checked by a script.
+`data-raw/qa/check_documented_claims.R` matches 48 numbers or statements in the help pages, the README and the code against the data (the generated blocks of this file are written by the QA scripts from the data). In this file 63 numbers outside the generated blocks are not matched: quoted source text of external documents, dates and urls, and values read from external documents. They are listed in `data-raw/qa/out/numbers_without_a_script.csv` and are not checked by a script.
 <!-- unchecked:end -->

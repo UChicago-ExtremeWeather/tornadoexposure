@@ -79,6 +79,10 @@ check("zcta_pop is not negative and is one value per ZCTA and boundary year", al
 lk <- tornado_dat_link; linked <- d$tornado_id %in% lk$tornado_id
 check("dat_linked is TRUE exactly for tornadoes in tornado_dat_link", identical(d$dat_linked, linked))
 check("dat_line_ids lists the linked lines (separated by ;) and is NA without a link", identical(is.na(d$dat_line_ids), !linked) && all(d$dat_line_ids[linked] == vapply(split(lk$dat_line_id, lk$tornado_id), function(x) paste(sort(x), collapse = ";"), "")[d$tornado_id[linked]]))
+mx <- tapply(lk$one_sided_dist_km, lk$tornado_id, max)
+check("dat_link_dist_km is NA exactly where dat_linked is FALSE and equals the largest one_sided_dist_km of the tornado's links in tornado_dat_link", identical(is.na(d$dat_link_dist_km), !d$dat_linked) && identical(d$dat_link_dist_km[linked], as.numeric(mx[d$tornado_id[linked]])))
+check("dat_link_dist_km is one value per tornado, is not negative, and is in the tract and block-group tables (no NA, the largest one_sided_dist_km of the tornado)", all(tapply(d$dat_link_dist_km[linked], d$tornado_id[linked], function(x) length(unique(x))) == 1L) && all(d$dat_link_dist_km[linked] >= 0) &&
+  all(vapply(list(dat_exposure_tract, dat_exposure_blockgroup), function(u) !anyNA(u$dat_link_dist_km) && identical(u$dat_link_dist_km, as.numeric(mx[u$tornado_id])), TRUE)))
 check("all DAT columns are NA without a link, and none is NA with a link except dat_exposed rules", all(is.na(d[!linked, c("dat_exposed", "dat_area_share", area_cols, "dat_pop_affected", pop_cols, pt_cols, "other_tornadoes_in_zcta_within_a_day")])) && !anyNA(d[linked, c("dat_exposed", "dat_area_share", area_cols, "dat_pop_affected", pop_cols)]))
 check("dat_exposed is TRUE exactly where dat_area_share is above 0", identical(d$dat_exposed[linked], d$dat_area_share[linked] > 0))
 check("every row is exposed by a source: spc_exposed or dat_exposed", all(d$spc_exposed | d$dat_exposed %in% TRUE))

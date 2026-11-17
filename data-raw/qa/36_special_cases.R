@@ -1,6 +1,6 @@
 # Run from the package root: Rscript data-raw/qa/36_special_cases.R
 # Writes three notes into data-raw/known_issues.md (every number computed from the data): ratings by year (unknown ratings
-# appear only from 2007), line tracks whose reported length is 0 although their coordinates are far apart, and tornadoes that
+# by year: none in 1996 to 2006, some from 2007), line tracks whose reported length is 0 although their coordinates are far apart, and tornadoes that
 # start outside the 48 states.
 suppressMessages({devtools::load_all(quiet = TRUE); library(dplyr); library(sf)})
 source("data-raw/qa/helpers.R")
@@ -10,8 +10,9 @@ md_table <- function(df) c(paste0("| ", paste(names(df), collapse = " | "), " |"
                            apply(df, 1, function(r) paste0("| ", paste(r, collapse = " | "), " |")))
 # ---- (a) ratings by year -----------------------------------------------------------------------------
 by_year <- tt %>% group_by(year) %>% summarise(EF0 = sum(magnitude == 0, na.rm = TRUE), `EF1 to EF5` = sum(magnitude >= 1, na.rm = TRUE), unknown = sum(is.na(magnitude)), .groups = "drop") %>% mutate(`share unknown` = paste0(f0(100 * unknown / (EF0 + `EF1 to EF5` + unknown), 1), "%"))
-first_na <- min(by_year$year[by_year$unknown > 0]); n_before <- sum(by_year$unknown[by_year$year < first_na])
-txt_a <- c(paste0("Unknown ratings (`magnitude` is `NA`) are absent before ", first_na, " (", n_before, " unknown ratings in 1996 to ", first_na - 1, ") and grow after: ", f0(sum(by_year$unknown[by_year$year >= first_na])), " of ", f0(sum(tt$year >= first_na)), " tornadoes from ", first_na, " on (", f0(100 * mean(is.na(tt$magnitude[tt$year >= first_na])), 1), "%). Counts of EF0 tornadoes are therefore not comparable across years unless unknown ratings are included. Tornadoes per year by rating:"), "", md_table(transform(by_year, year = as.character(year), EF0 = f0(EF0), `EF1 to EF5` = f0(`EF1 to EF5`), unknown = f0(unknown), check.names = FALSE)))
+by_year$n <- by_year$EF0 + by_year$`EF1 to EF5` + by_year$unknown; u <- setNames(by_year$unknown, by_year$year); yq <- 100 * by_year$unknown / by_year$n; late <- by_year$year >= 2016
+stopifnot(all(u[by_year$year <= 2006] == 0), u[["2007"]] > 0, all(u[by_year$year %in% 2008:2015] == 0), all(u[late] > 0))   # the sentence below states exactly this pattern
+txt_a <- c(paste0("Unknown ratings (`magnitude` is `NA`): ", f0(sum(by_year$unknown)), " of ", f0(nrow(tt)), " tornadoes. There are none in 1996 to 2006, ", u[["2007"]], " in 2007 (", f0(yq[by_year$year == 2007], 1), "% of that year), none in 2008 to 2015, and some in every year from 2016 to 2025: ", f0(min(u[late])), " to ", f0(max(u[late])), " a year (", f0(min(yq[late]), 1), "% to ", f0(max(yq[late]), 1), "% of the tornadoes of the year). Counts of EF0 tornadoes are comparable across years only if unknown ratings are included, and this matters from 2016 on. Tornadoes per year by rating:"), "", md_table(transform(by_year, n = NULL, year = as.character(year), EF0 = f0(EF0), `EF1 to EF5` = f0(`EF1 to EF5`), unknown = f0(unknown), check.names = FALSE)))
 # ---- (b) line tracks with len_mi = 0 -----------------------------------------------------------------------
 ln <- tornado_tracks[tornado_tracks$track_type == "line" & tornado_tracks$len_mi == 0, ]
 chord <- as.numeric(st_length(st_transform(ln, 5070))) / 1609.344

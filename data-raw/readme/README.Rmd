@@ -48,7 +48,7 @@ From the NWS Damage Assessment Toolkit (DAT), every feature the service holds, w
 
 * `dat_lines` (`r f0(nrow(dat_lines))`), `dat_polygons` (`r f0(nrow(dat_polygons))`) and `dat_points` (`r f0(nrow(dat_points))`).
 * `tornado_dat_link` (`r f0(nrow(tornado_dat_link))` rows): the DAT lines linked to SPC tornadoes, with every number that describes the link (no cutoff). `dat_polygon_line_link` (`r f0(nrow(dat_polygon_line_link))` rows): the distance between each polygon and each line dated within a day, and the share of the line inside the polygon.
-* The DAT columns of `tornado_exposure` (`NA` for a tornado with no linked line, `r f0(sum(!ex$dat_linked[!duplicated(ex$tornado_id)]))` of the `r f0(length(unique(ex$tornado_id)))` tornadoes in it): the land-only share of the ZCTA covered by the union of the tornado's linked EF0 to EF5 polygons (each area counted once, with the part whose highest rated polygon is EF0, EF1, ... EF5 in `dat_area_share_ef0` to `dat_area_share_ef5`), the residents in that land (`dat_pop_affected`, and `dat_pop_ef0` to `dat_pop_ef5`), the damage points in the ZCTA dated within a day by `efscale` (`dat_points_*`), and the number of other SPC tornadoes crossing the ZCTA within a day. `dat_exposure_tract` (`r f0(nrow(dat_exposure_tract))` rows) and `dat_exposure_blockgroup` (`r f0(nrow(dat_exposure_blockgroup))` rows) have the same DAT columns for census tracts and block groups, and no SPC columns because SPC's positions are not accurate enough to say which tract or block group a tornado crossed.
+* The DAT columns of `tornado_exposure` (`NA` for a tornado with no linked line, `r f0(sum(!ex$dat_linked[!duplicated(ex$tornado_id)]))` of the `r f0(length(unique(ex$tornado_id)))` tornadoes in it): the land-only share of the ZCTA covered by the union of the tornado's linked EF0 to EF5 polygons (each area counted once, with the part whose highest rated polygon is EF0, EF1, ... EF5 in `dat_area_share_ef0` to `dat_area_share_ef5`), the largest one-sided distance among the linked lines (`dat_link_dist_km`), the residents in that land (`dat_pop_affected`, and `dat_pop_ef0` to `dat_pop_ef5`), the damage points in the ZCTA dated within a day by `efscale` (`dat_points_*`), and the number of other SPC tornadoes crossing the ZCTA within a day. `dat_exposure_tract` (`r f0(nrow(dat_exposure_tract))` rows) and `dat_exposure_blockgroup` (`r f0(nrow(dat_exposure_blockgroup))` rows) have the same DAT columns for census tracts and block groups, and no SPC columns because SPC's positions are not accurate enough to say which tract or block group a tornado crossed.
 
 From the Census Bureau:
 
@@ -68,6 +68,7 @@ The main variables of `tornado_exposure` (all are described in `?tornado_exposur
 | `boundary_dist_km`, `centroid_dist_km` | distance in km from the SPC line (or start point) to the ZCTA boundary (0 exactly where the line crosses it) and to its population-weighted centroid |
 | `zcta_pop`, `zcta_land_area_m2`, `zcta_polygon_area_m2`, `zcta_land_shape_area_m2` | residents, Census land area (`ALAND`), area of the full ZCTA polygon, area of the land-only shape (the polygon minus the Census water polygons) |
 | `dat_linked`, `dat_line_ids` | the tornado has a linked DAT line / the linked line ids |
+| `dat_link_dist_km` | the largest one-sided distance (km) among the tornado's linked DAT lines, from `tornado_dat_link$one_sided_dist_km` (`NA` where `dat_linked` is `FALSE`); the value for each line is in `tornado_dat_link` |
 | `dat_area_share`, `dat_area_share_ef0` ... `dat_area_share_ef5` | land-only share covered by the linked polygons, in all and by highest rating (the parts sum to the total) |
 | `dat_pop_affected`, `dat_pop_ef0` ... `dat_pop_ef5` | residents in the covered land, in all and by highest rating |
 | `dat_points_ef0` ... `dat_points_ef5`, `dat_points_efu`, `dat_points_wind`, `dat_points_other` | DAT damage points in the ZCTA dated within one day of the tornado, by `efscale` as entered |
@@ -178,11 +179,11 @@ For the `r f0(N("spc_vs_dat_n"))` tornadoes that have a linked DAT line and at l
 ### Tornadoes with no usable end point
 
 ```{r noend, include = FALSE}
-pt <- tt$track_type == "point"; ef0s <- mean(tt$magnitude[pt] == 0, na.rm = TRUE); Lp <- tt$len_mi[pt]
+pt <- tt$track_type == "point"; ef0s <- mean(tt$magnitude[pt] == 0, na.rm = TRUE); ef0a <- mean(tt$magnitude[pt] %in% 0); Lp <- tt$len_mi[pt]
 yy <- as.integer(substr(tt$tornado_id, 1, 4))
 ```
 
-`r f0(sum(pt))` tornadoes (`r p1(100 * mean(pt))`%) have no usable end point. `r p1(100 * ef0s)`% of them are EF0 and the median reported length is `r sprintf("%.2f", median(Lp))` mile, but `r f0(sum(Lp >= 1))` are 1 mile or longer, `r f0(sum(Lp >= 5))` are 5 miles or longer and the longest is `r sprintf("%.1f", max(Lp))` miles; `r f0(sum(pt & yy <= 2006))` are from 1996 to 2006 and `r f0(sum(pt & yy >= 2007))` from 2007 on; they account for `r f0(sum(tt$total_injury[pt]))` injuries and `r f0(sum(tt$total_fatality[pt]))` deaths. Each is a point at its start; the real path may extend up to the reported length in an unknown direction. Such a tornado is exposed only in the ZCTA that contains the start point, and `r f0(sum(pt & !tt$tornado_id %in% ex$tornado_id[ex$spc_exposed]))` have no SPC row because the start lies in no ZCTA. The tables are in `data-raw/known_issues.md`.
+`r f0(sum(pt))` tornadoes (`r p1(100 * mean(pt))`%) have no usable end point. `r p1(100 * ef0a)`% of them are EF0 (`r p1(100 * ef0s)`% of those with a rating) and the median reported length is `r sprintf("%.2f", median(Lp))` mile, but `r f0(sum(Lp >= 1))` are 1 mile or longer, `r f0(sum(Lp >= 5))` are 5 miles or longer and the longest is `r sprintf("%.1f", max(Lp))` miles; `r f0(sum(pt & yy <= 2006))` are from 1996 to 2006 and `r f0(sum(pt & yy >= 2007))` from 2007 on; they account for `r f0(sum(tt$total_injury[pt]))` injuries and `r f0(sum(tt$total_fatality[pt]))` deaths. Each is a point at its start; the real path may extend up to the reported length in an unknown direction. Such a tornado is exposed only in the ZCTA that contains the start point, and `r f0(sum(pt & !tt$tornado_id %in% ex$tornado_id[ex$spc_exposed]))` have no SPC row because the start lies in no ZCTA. The tables are in `data-raw/known_issues.md`.
 
 ## What is and is not done to the source data
 
@@ -198,6 +199,11 @@ Numbers for each point, and how they were computed: `data-raw/known_issues.md`.
 yr <- as.integer(format(tt$date, "%Y")); unk <- is.na(tt$magnitude)
 ef0 <- tapply(!unk & tt$magnitude == 0, yr, sum); un <- tapply(unk, yr, sum); ym <- names(which.max(un / table(yr)))
 lk <- tornado_dat_link; far <- lk$one_sided_dist_km > 5
+nz <- sum(!tt$tornado_id %in% ex$tornado_id); stopifnot(nz == N("noz_n"))
+uy <- tapply(unk, yr, sum); uq <- 100 * uy / table(yr); uyr <- as.integer(names(uy)); stopifnot(all(uy[uyr <= 2006] == 0), uy[["2007"]] > 0, all(uy[uyr %in% 2008:2015] == 0), all(uy[uyr >= 2016] > 0))
+u16 <- uyr >= 2016
+do <- ex[!ex$spc_exposed & ex$dat_exposed %in% TRUE, ]; fr <- function(km) c(rows = sum(do$boundary_dist_km > km), torn = length(unique(do$tornado_id[do$boundary_dist_km > km])))
+stopifnot(all(unname(fr(5)) == c(N("far_5_rows"), N("far_5_tornadoes"))), all(unname(fr(25)) == c(N("far_25_rows"), N("far_25_tornadoes"))), all(unname(fr(100)) == c(N("far_100_rows"), N("far_100_tornadoes"))))
 ```
 
 * The SPC line is straight from SPC's start point to its end point. Real paths curve, and the SPC width is not used for any shape. `line_share_of_tornado` and `property_loss_allocated` assume that damage is spread evenly along the line.
@@ -208,12 +214,13 @@ lk <- tornado_dat_link; far <- lk$one_sided_dist_km > 5
 * The DAT columns exist only for tornadoes with a linked DAT line. Surveys do not cover every tornado (coverage grows from a few tornadoes in 2007 to most in 2025). The DAT polygons are the NWS's own survey shapes and their accuracy has not been measured. Points are not linked to tornadoes by any rule: a damage point dated within a day of a tornado can belong to another tornado of the same day (`other_tornadoes_in_zcta_within_a_day`).
 * Residents are allocated from census blocks by the share of each block's land covered (uniform density on the land of a block). The 2020 block counts have disclosure-avoidance noise added by the Census Bureau. Population uses the 2000 census for tornadoes before 2010, the 2010 census for 2010 to 2019 and the 2020 census from 2020.
 * Exposure uses the Census boundary year (2000, 2010 or 2020) that matches the tornado's year: 2000 before 2010, 2010 for 2010 to 2019, 2020 from 2020. The same ZCTA code can cover a different area in different boundary years: `r p1(N("overlap_half_2010_2020_pct"))`% of the codes in both the 2010 and 2020 files overlap by less than half (intersection over union).
-* `r f0(N("noz_n"))` tornadoes (`r p1(N("noz_pct"))`%) have no SPC row (their line crosses no ZCTA of the boundary year, or their start point lies in none): `r f0(N("noz_water"))` are over water, `r f0(N("noz_nonear"))` are over land with no ZCTA nearby, `r f0(N("noz_mostly"))` are on land that is mostly covered by no ZCTA. `r f0(sum(!tt$tornado_id %in% ex$tornado_id))` of them have no row at all (no linked NWS polygon covers land in a ZCTA either).
-* Unknown ratings (`NA`) appear only from 2007: `r f0(sum(unk))` tornadoes, `r f0(sum(unk & yr < 2007))` before 2007. EF0 counts across years are comparable only if unknown ratings are included: in `r ym`, `r f0(ef0[[ym]])` tornadoes are EF0 and `r f0(un[[ym]])` are unknown.
+* `r f0(N("noz_n"))` tornadoes (`r p1(N("noz_pct"))`%) have no SPC row (their line crosses no ZCTA of the boundary year, or their start point lies in none): `r f0(N("noz_water"))` are over water, `r f0(N("noz_nonear"))` are over land with no ZCTA nearby, `r f0(N("noz_mostly"))` are on land that is mostly covered by no ZCTA. `r if (nz == N("noz_n")) "All" else f0(nz)` `r f0(N("noz_n"))` have no row at all (no linked NWS polygon covers land in a ZCTA either).
+* Unknown ratings (`NA`): `r f0(sum(unk))` tornadoes. There are none in 1996 to 2006, `r f0(uy[["2007"]])` in 2007 (`r p1(uq[["2007"]])`% of that year), none in 2008 to 2015, and some in every year from 2016 to 2025: `r f0(min(uy[u16]))` to `r f0(max(uy[u16]))` a year (`r p1(min(uq[u16]))`% to `r p1(max(uq[u16]))`% of the tornadoes of the year). EF0 counts across years are comparable only if unknown ratings are included, and this matters from 2016 on: in `r ym`, `r f0(ef0[[ym]])` tornadoes are EF0 and `r f0(un[[ym]])` are unknown.
 * SPC loss is `NA` where SPC recorded 0 (which NOAA says does not mean $0): `r f0(sum(is.na(tt$property_loss_tornado_total)))` of
   `r f0(nrow(tt))` tornadoes. SPC reports loss in millions of dollars before 2007 and in dollars from 2007; the package converts everything to dollars. The values are nominal (not adjusted for inflation).
 * `tornado_id` is unique within a package version but is not stable across SPC releases from 2007 on.
 * The DAT data are preliminary; the dataset is described by its stewards as intended for public access and use ([NOAA Damage Assessment Toolkit page](https://disasters-geoplatform.hub.arcgis.com/pages/noaa-damage-assessment-toolkit-dat)). No license text was found, and this package does not claim that the data are in the public domain. `tornado_dat_link` has no cutoff: `r f0(sum(far))` of its `r f0(nrow(lk))` links have a one-sided distance above 5 km (an example, not a recommendation), so filter on the distance columns for your purpose.
+* DAT-only rows (`spc_exposed` `FALSE` and `dat_exposed` `TRUE`: `r f0(nrow(do))` rows in `r f0(length(unique(do$tornado_id)))` tornadoes) are ZCTAs that a linked NWS polygon covers but the SPC line does not cross. For `r f0(length(unique(do$tornado_id)) - fr(5)[["torn"]])` of these tornadoes every such row lies within 5 km of the SPC line (`boundary_dist_km`); the others are farther: `r f0(fr(5)[["rows"]])` rows (`r f0(fr(5)[["torn"]])` tornadoes) beyond 5 km, `r f0(fr(25)[["rows"]])` (`r f0(fr(25)[["torn"]])`) beyond 25 km and `r f0(fr(100)[["rows"]])` (`r f0(fr(100)[["torn"]])`) beyond 100 km, the farthest `r sprintf("%.2f", max(do$boundary_dist_km))` km. These are probably wrong links or surveys of another tornado. No cutoff is applied; 5, 25 and 100 km are descriptive values, not recommendations. Filter on `dat_link_dist_km` and `boundary_dist_km` for your purpose.
 
 ## Citation
 
@@ -226,8 +233,7 @@ Data sources:
 * U.S. Census Bureau, decennial population counts for 2000 and 2010 ([PL 94-171 redistricting files, 2000](https://www2.census.gov/census_2000/datasets/redistricting_file--pl_94-171/) and [2010](https://www2.census.gov/census_2010/01-Redistricting_File--PL_94-171/)) (accessed `r readLines("data-raw/access_date.txt")`).
 * NOAA National Weather Service [Damage Assessment Toolkit](https://apps.dat.noaa.gov/StormDamage/DamageViewer/) (queried `r readLines("data-raw/dat/access_date.txt")`).
 
-To cite the package, use the DOI of the archived release:
-**To cite the package, use https://doi.org/10.5281/zenodo.23544841**.
+To cite the package, use https://doi.org/10.5281/zenodo.23544841.
 See `citation("tornadoexposure")`.
 
 ## Acknowledgements
